@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=Acquacotta
+Comment=Pomodoro time tracking application
+Exec=acquacotta
+Icon=com.github.fatherlinux.Acquacotta
+Terminal=false
+Type=Application
+Categories=Utility;Office;ProjectManagement;
+Keywords=pomodoro;timer;productivity;time;tracking;
+StartupWMClass=acquacotta

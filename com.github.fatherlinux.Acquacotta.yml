@@ -1,0 +1,47 @@
+app-id: com.github.fatherlinux.Acquacotta
+runtime: org.freedesktop.Platform
+runtime-version: '24.08'
+sdk: org.freedesktop.Sdk
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.rust-stable
+  - org.freedesktop.Sdk.Extension.node20
+command: acquacotta
+
+finish-args:
+  - --share=ipc
+  - --socket=fallback-x11
+  - --socket=wayland
+  - --socket=pulseaudio
+  - --device=dri
+  - --talk-name=org.freedesktop.Notifications
+  - --filesystem=xdg-data/acquacotta:create
+
+modules:
+  - name: acquacotta
+    buildsystem: simple
+    build-options:
+      append-path: /usr/lib/sdk/rust-stable/bin:/usr/lib/sdk/node20/bin
+      env:
+        CARGO_HOME: /run/build/acquacotta/cargo
+        npm_config_nodedir: /usr/lib/sdk/node20
+      # Allow network for fetching dependencies during build
+      build-args:
+        - --share=network
+    build-commands:
+      # Install npm dependencies
+      - npm install
+      # Build the frontend
+      - npm run build
+      # Build the Rust backend
+      - cd src-tauri && cargo build --release
+      # Install the binary
+      - install -Dm755 src-tauri/target/release/acquacotta /app/bin/acquacotta
+      # Install desktop file
+      - install -Dm644 com.github.fatherlinux.Acquacotta.desktop /app/share/applications/com.github.fatherlinux.Acquacotta.desktop
+      # Install icon
+      - install -Dm644 src-tauri/icons/icon.svg /app/share/icons/hicolor/scalable/apps/com.github.fatherlinux.Acquacotta.svg
+      # Install metainfo
+      - install -Dm644 com.github.fatherlinux.Acquacotta.metainfo.xml /app/share/metainfo/com.github.fatherlinux.Acquacotta.metainfo.xml
+    sources:
+      - type: dir
+        path: .
