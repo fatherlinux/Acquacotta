@@ -11,26 +11,14 @@
       focused and productive. Track your work sessions with customizable timers,
       categorize your work by type, and view detailed reports of your productivity.
     </p>
-    <p>Features:</p>
-    <ul>
-      <li>Configurable work and break durations</li>
-      <li>Pause and resume timer functionality</li>
-      <li>Categorize pomodoros by type (Product, Content, Team, etc.)</li>
-      <li>View daily, weekly, and monthly reports with charts</li>
-      <li>Export data to CSV</li>
-      <li>Desktop notifications with sound alerts</li>
-    </ul>
   </description>
   <launchable type="desktop-id">com.github.fatherlinux.Acquacotta.desktop</launchable>
   <url type="homepage">https://github.com/fatherlinux/Acquacotta</url>
-  <url type="bugtracker">https://github.com/fatherlinux/Acquacotta/issues</url>
   <developer_name>Scott McCarty</developer_name>
   <content_rating type="oars-1.1" />
   <releases>
     <release version="0.1.0" date="2025-12-12">
-      <description>
-        <p>Initial release</p>
-      </description>
+      <description><p>Initial release</p></description>
     </release>
   </releases>
 </component>

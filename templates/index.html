@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Acquacotta</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --bg-primary: #1a1a2e;
+            --bg-secondary: #16213e;
+            --bg-tertiary: #0f3460;
+            --text-primary: #eaeaea;
+            --text-secondary: #a0a0a0;
+            --accent: #e94560;
+            --accent-hover: #ff6b6b;
+            --success: #4ecca3;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+        }
+        .container { max-width: 800px; margin: 0 auto; padding: 1rem; }
+        nav {
+            display: flex; gap: 0.5rem;
+            background: var(--bg-secondary);
+            padding: 0.5rem; border-radius: 8px; margin-bottom: 1rem;
+        }
+        nav button {
+            flex: 1; padding: 0.75rem; border: none; border-radius: 8px;
+            background: transparent; color: var(--text-secondary);
+            cursor: pointer; font-size: 1rem;
+        }
+        nav button:hover { background: var(--bg-tertiary); color: var(--text-primary); }
+        nav button.active { background: var(--accent); color: white; }
+        .view { display: none; }
+        .view.active { display: block; }
+        .card {
+            background: var(--bg-secondary);
+            border-radius: 8px; padding: 1.5rem; margin-bottom: 1rem;
+        }
+        button.primary {
+            background: var(--accent); color: white; border: none;
+            padding: 0.75rem 1.5rem; border-radius: 8px; cursor: pointer;
+            font-size: 1rem;
+        }
+        button.primary:hover { background: var(--accent-hover); }
+        button.secondary {
+            background: var(--bg-tertiary); color: var(--text-primary);
+            border: none; padding: 0.75rem 1.5rem; border-radius: 8px; cursor: pointer;
+        }
+        input, select, textarea {
+            background: var(--bg-primary); border: 1px solid var(--bg-tertiary);
+            border-radius: 8px; color: var(--text-primary);
+            padding: 0.75rem; font-size: 1rem; width: 100%;
+        }
+        input:focus, select:focus { outline: none; border-color: var(--accent); }
+        label { display: block; margin-bottom: 0.5rem; color: var(--text-secondary); font-size: 0.875rem; }
+        .form-group { margin-bottom: 1rem; }
+        h2 { margin-bottom: 1rem; }
+        h3 { font-size: 1rem; color: var(--text-secondary); margin-bottom: 0.5rem; }
+
+        /* Timer */
+        .timer-container { text-align: center; padding: 2rem; }
+        .timer-display { position: relative; width: 280px; height: 280px; margin: 0 auto 2rem; }
+        .timer-ring { transform: rotate(-90deg); }
+        .timer-ring-bg { fill: none; stroke: var(--bg-tertiary); stroke-width: 8; }
+        .timer-ring-progress {
+            fill: none; stroke: var(--accent); stroke-width: 8;
+            stroke-linecap: round; transition: stroke-dashoffset 0.5s;
+        }
+        .timer-ring-progress.break { stroke: var(--success); }
+        .timer-text {
+            position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%, -50%); text-align: center;
+        }
+        .timer-time { font-size: 3.5rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+        .timer-status { color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.1em; }
+        .timer-controls { display: flex; gap: 1rem; justify-content: center; }
+        .timer-controls button { min-width: 100px; }
+
+        /* Modal */
+        .modal-overlay {
+            display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.7); align-items: center; justify-content: center; z-index: 100;
+        }
+        .modal-overlay.active { display: flex; }
+        .modal { background: var(--bg-secondary); border-radius: 8px; padding: 1.5rem; width: 100%; max-width: 400px; margin: 1rem; }
+        .modal h2 { margin-bottom: 1.5rem; }
+        .modal-actions { display: flex; gap: 0.75rem; justify-content: flex-end; margin-top: 1.5rem; }
+
+        /* History */
+        .pomodoro-item {
+            display: flex; justify-content: space-between; align-items: flex-start;
+            padding: 1rem; background: var(--bg-secondary); border-radius: 8px; margin-bottom: 0.5rem;
+        }
+        .pomodoro-name { font-weight: 500; }
+        .pomodoro-type {
+            display: inline-block; font-size: 0.75rem; padding: 0.25rem 0.5rem;
+            border-radius: 4px; margin-left: 0.5rem;
+        }
+        .pomodoro-meta { font-size: 0.875rem; color: var(--text-secondary); margin-top: 0.25rem; }
+        .pomodoro-actions button {
+            background: none; border: none; color: var(--text-secondary);
+            cursor: pointer; padding: 0.5rem; font-size: 1rem;
+        }
+        .pomodoro-actions button:hover { color: var(--text-primary); }
+        .empty { text-align: center; padding: 3rem; color: var(--text-secondary); }
+
+        /* Reports */
+        .summary-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-bottom: 1rem; }
+        .summary-card { text-align: center; padding: 1.5rem 1rem; }
+        .summary-value { display: block; font-size: 2rem; font-weight: 700; color: var(--accent); }
+        .summary-label { font-size: 0.875rem; color: var(--text-secondary); }
+        .period-nav { display: flex; align-items: center; justify-content: center; gap: 1rem; margin-bottom: 1rem; }
+        .period-selector { display: flex; gap: 0.5rem; background: var(--bg-secondary); padding: 0.25rem; border-radius: 8px; margin-bottom: 1rem; }
+        .period-selector button { flex: 1; padding: 0.5rem; background: transparent; border: none; color: var(--text-secondary); cursor: pointer; border-radius: 6px; }
+        .period-selector button.active { background: var(--bg-tertiary); color: var(--text-primary); }
+        .chart-container { height: 250px; margin-bottom: 1rem; }
+
+        /* Settings */
+        .setting-row { margin-bottom: 1.5rem; }
+        .setting-label { display: flex; justify-content: space-between; align-items: center; }
+        .setting-value { color: var(--accent); }
+        input[type="range"] { margin-top: 0.5rem; }
+        input[type="checkbox"] { width: auto; margin-right: 0.5rem; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <nav>
+            <button class="active" data-view="timer">Timer</button>
+            <button data-view="history">History</button>
+            <button data-view="reports">Reports</button>
+            <button data-view="settings">Settings</button>
+        </nav>
+
+        <!-- Timer View -->
+        <div id="timer-view" class="view active">
+            <div class="timer-container">
+                <div class="timer-display">
+                    <svg viewBox="0 0 280 280" class="timer-ring">
+                        <circle class="timer-ring-bg" cx="140" cy="140" r="120"/>
+                        <circle id="timer-progress" class="timer-ring-progress" cx="140" cy="140" r="120"
+                            stroke-dasharray="754" stroke-dashoffset="0"/>
+                    </svg>
+                    <div class="timer-text">
+                        <div id="timer-time" class="timer-time">25:00</div>
+                        <div id="timer-status" class="timer-status">Ready</div>
+                    </div>
+                </div>
+                <div id="session-info" style="color: var(--text-secondary); margin-bottom: 1rem;">Session 1</div>
+                <div class="timer-controls">
+                    <button id="btn-start" class="primary">Start</button>
+                    <button id="btn-pause" class="secondary" style="display:none;">Pause</button>
+                    <button id="btn-resume" class="primary" style="display:none;">Resume</button>
+                    <button id="btn-stop" class="secondary" style="display:none;">Stop</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- History View -->
+        <div id="history-view" class="view">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                <h2>History</h2>
+                <button class="secondary" onclick="showAddModal()">+ Add Manual</button>
+            </div>
+            <div id="history-list"></div>
+        </div>
+
+        <!-- Reports View -->
+        <div id="reports-view" class="view">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                <h2>Reports</h2>
+                <a href="/api/export" class="secondary" style="text-decoration:none; display:inline-block; padding:0.75rem 1.5rem; background:var(--bg-tertiary); border-radius:8px; color:var(--text-primary);">Export CSV</a>
+            </div>
+            <div class="period-selector">
+                <button class="active" data-period="day">Day</button>
+                <button data-period="week">Week</button>
+                <button data-period="month">Month</button>
+            </div>
+            <div class="period-nav">
+                <button class="secondary" onclick="navigatePeriod(-1)">&larr;</button>
+                <span id="period-label" style="min-width: 200px; text-align: center;"></span>
+                <button class="secondary" onclick="navigatePeriod(1)">&rarr;</button>
+            </div>
+            <div class="summary-cards">
+                <div class="card summary-card">
+                    <span id="report-count" class="summary-value">0</span>
+                    <span class="summary-label">Pomodoros</span>
+                </div>
+                <div class="card summary-card">
+                    <span id="report-time" class="summary-value">0m</span>
+                    <span class="summary-label">Total Time</span>
+                </div>
+                <div class="card summary-card">
+                    <span id="report-avg" class="summary-value">0m</span>
+                    <span class="summary-label">Avg Duration</span>
+                </div>
+            </div>
+            <div class="card">
+                <h3>By Type</h3>
+                <div class="chart-container"><canvas id="chart-type"></canvas></div>
+            </div>
+            <div class="card">
+                <h3>Daily Activity</h3>
+                <div class="chart-container"><canvas id="chart-daily"></canvas></div>
+            </div>
+        </div>
+
+        <!-- Settings View -->
+        <div id="settings-view" class="view">
+            <h2>Settings</h2>
+            <div class="card">
+                <h3>Timer Durations</h3>
+                <div class="setting-row">
+                    <div class="setting-label">
+                        <span>Work Duration</span>
+                        <span id="work-value" class="setting-value">25 min</span>
+                    </div>
+                    <input type="range" id="work-duration" min="1" max="60" value="25">
+                </div>
+                <div class="setting-row">
+                    <div class="setting-label">
+                        <span>Short Break</span>
+                        <span id="break-value" class="setting-value">5 min</span>
+                    </div>
+                    <input type="range" id="short-break" min="1" max="30" value="5">
+                </div>
+            </div>
+            <div style="text-align: right;">
+                <button class="primary" onclick="saveSettings()">Save Settings</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Save Pomodoro Modal -->
+    <div id="save-modal" class="modal-overlay">
+        <div class="modal">
+            <h2>Save Pomodoro</h2>
+            <div class="form-group">
+                <label for="pomo-name">What did you work on?</label>
+                <input type="text" id="pomo-name" placeholder="Enter a description...">
+            </div>
+            <div class="form-group">
+                <label for="pomo-type">Type</label>
+                <select id="pomo-type">
+                    {% for t in types %}
+                    <option value="{{ t }}">{{ t }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="pomo-notes">Notes (optional)</label>
+                <textarea id="pomo-notes" rows="2" placeholder="Any additional notes..."></textarea>
+            </div>
+            <div class="modal-actions">
+                <button class="secondary" onclick="discardPomodoro()">Discard</button>
+                <button class="primary" onclick="savePomodoro()">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Manual Modal -->
+    <div id="add-modal" class="modal-overlay">
+        <div class="modal">
+            <h2>Add Manual Pomodoro</h2>
+            <div class="form-group">
+                <label for="add-name">Description</label>
+                <input type="text" id="add-name" placeholder="What did you work on?">
+            </div>
+            <div class="form-group">
+                <label for="add-type">Type</label>
+                <select id="add-type">
+                    {% for t in types %}
+                    <option value="{{ t }}">{{ t }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                <div class="form-group">
+                    <label for="add-date">Date</label>
+                    <input type="date" id="add-date">
+                </div>
+                <div class="form-group">
+                    <label for="add-time">Start Time</label>
+                    <input type="time" id="add-time" value="09:00">
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="add-duration">Duration (minutes)</label>
+                <input type="number" id="add-duration" value="25" min="1" max="120">
+            </div>
+            <div class="modal-actions">
+                <button class="secondary" onclick="hideAddModal()">Cancel</button>
+                <button class="primary" onclick="addManualPomodoro()">Add</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Type colors
+        const TYPE_COLORS = {
+            "Product": "#e94560",
+            "Customer/Partner/Community": "#4ecca3",
+            "Content": "#ffc93c",
+            "Team": "#a855f7",
+            "Social Media": "#3b82f6",
+            "Unqueued": "#6b7280",
+            "Queued": "#8b5cf6",
+            "Learn/Train": "#10b981",
+            "Travel": "#f97316",
+            "PTO": "#06b6d4"
+        };
+
+        // Timer state
+        let timerState = 'idle';
+        let remainingSeconds = 25 * 60;
+        let totalSeconds = 25 * 60;
+        let timerInterval = null;
+        let sessionCount = 1;
+        let settings = { work_duration_minutes: 25, short_break_minutes: 5 };
+
+        // Report state
+        let currentPeriod = 'week';
+        let currentDate = new Date().toISOString().split('T')[0];
+        let typeChart = null;
+        let dailyChart = null;
+
+        // Navigation
+        document.querySelectorAll('nav button').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+                document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+                btn.classList.add('active');
+                document.getElementById(btn.dataset.view + '-view').classList.add('active');
+                if (btn.dataset.view === 'history') loadHistory();
+                if (btn.dataset.view === 'reports') loadReport();
+            });
+        });
+
+        // Timer functions
+        const circumference = 2 * Math.PI * 120;
+
+        function updateTimerDisplay() {
+            const mins = Math.floor(remainingSeconds / 60);
+            const secs = remainingSeconds % 60;
+            document.getElementById('timer-time').textContent =
+                `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+
+            const progress = (totalSeconds - remainingSeconds) / totalSeconds;
+            const offset = circumference * (1 - progress);
+            document.getElementById('timer-progress').style.strokeDashoffset = offset;
+            document.getElementById('session-info').textContent = `Session ${sessionCount}`;
+        }
+
+        function startTimer() {
+            timerState = 'running';
+            totalSeconds = settings.work_duration_minutes * 60;
+            remainingSeconds = totalSeconds;
+            document.getElementById('timer-status').textContent = 'Focus';
+            document.getElementById('btn-start').style.display = 'none';
+            document.getElementById('btn-pause').style.display = 'inline-block';
+            document.getElementById('btn-stop').style.display = 'inline-block';
+
+            timerInterval = setInterval(() => {
+                if (remainingSeconds > 0) {
+                    remainingSeconds--;
+                    updateTimerDisplay();
+                } else {
+                    clearInterval(timerInterval);
+                    timerComplete();
+                }
+            }, 1000);
+            updateTimerDisplay();
+        }
+
+        function pauseTimer() {
+            timerState = 'paused';
+            clearInterval(timerInterval);
+            document.getElementById('timer-status').textContent = 'Paused';
+            document.getElementById('btn-pause').style.display = 'none';
+            document.getElementById('btn-resume').style.display = 'inline-block';
+        }
+
+        function resumeTimer() {
+            timerState = 'running';
+            document.getElementById('timer-status').textContent = 'Focus';
+            document.getElementById('btn-resume').style.display = 'none';
+            document.getElementById('btn-pause').style.display = 'inline-block';
+
+            timerInterval = setInterval(() => {
+                if (remainingSeconds > 0) {
+                    remainingSeconds--;
+                    updateTimerDisplay();
+                } else {
+                    clearInterval(timerInterval);
+                    timerComplete();
+                }
+            }, 1000);
+        }
+
+        function stopTimer() {
+            clearInterval(timerInterval);
+            document.getElementById('save-modal').classList.add('active');
+        }
+
+        function timerComplete() {
+            // Play notification sound
+            if (Notification.permission === 'granted') {
+                new Notification('Pomodoro Complete!', { body: 'Great work! Time for a break.' });
+            }
+            document.getElementById('save-modal').classList.add('active');
+        }
+
+        function resetTimer() {
+            timerState = 'idle';
+            remainingSeconds = settings.work_duration_minutes * 60;
+            totalSeconds = remainingSeconds;
+            document.getElementById('timer-status').textContent = 'Ready';
+            document.getElementById('btn-start').style.display = 'inline-block';
+            document.getElementById('btn-pause').style.display = 'none';
+            document.getElementById('btn-resume').style.display = 'none';
+            document.getElementById('btn-stop').style.display = 'none';
+            updateTimerDisplay();
+        }
+
+        async function savePomodoro() {
+            const name = document.getElementById('pomo-name').value.trim();
+            if (!name) return alert('Please enter a description');
+
+            await fetch('/api/pomodoros', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    name,
+                    type: document.getElementById('pomo-type').value,
+                    duration_minutes: settings.work_duration_minutes,
+                    notes: document.getElementById('pomo-notes').value.trim() || null
+                })
+            });
+
+            sessionCount++;
+            document.getElementById('save-modal').classList.remove('active');
+            document.getElementById('pomo-name').value = '';
+            document.getElementById('pomo-notes').value = '';
+            resetTimer();
+        }
+
+        function discardPomodoro() {
+            document.getElementById('save-modal').classList.remove('active');
+            document.getElementById('pomo-name').value = '';
+            document.getElementById('pomo-notes').value = '';
+            resetTimer();
+        }
+
+        document.getElementById('btn-start').addEventListener('click', startTimer);
+        document.getElementById('btn-pause').addEventListener('click', pauseTimer);
+        document.getElementById('btn-resume').addEventListener('click', resumeTimer);
+        document.getElementById('btn-stop').addEventListener('click', stopTimer);
+
+        // History
+        async function loadHistory() {
+            const res = await fetch('/api/pomodoros');
+            const pomodoros = await res.json();
+            const list = document.getElementById('history-list');
+
+            if (pomodoros.length === 0) {
+                list.innerHTML = '<div class="empty">No pomodoros yet. Start your first timer!</div>';
+                return;
+            }
+
+            // Group by date
+            const grouped = {};
+            pomodoros.forEach(p => {
+                const date = new Date(p.start_time).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+                if (!grouped[date]) grouped[date] = [];
+                grouped[date].push(p);
+            });
+
+            let html = '';
+            for (const [date, items] of Object.entries(grouped)) {
+                html += `<h3>${date}</h3>`;
+                items.forEach(p => {
+                    const color = TYPE_COLORS[p.type] || '#6b7280';
+                    const time = new Date(p.start_time).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+                    html += `
+                        <div class="pomodoro-item">
+                            <div>
+                                <span class="pomodoro-name">${escapeHtml(p.name)}</span>
+                                <span class="pomodoro-type" style="background:${color}20;color:${color}">${p.type}</span>
+                                <div class="pomodoro-meta">${time} - ${p.duration_minutes} min</div>
+                            </div>
+                            <div class="pomodoro-actions">
+                                <button onclick="deletePomodoro('${p.id}')" title="Delete">&#10005;</button>
+                            </div>
+                        </div>
+                    `;
+                });
+            }
+            list.innerHTML = html;
+        }
+
+        async function deletePomodoro(id) {
+            if (!confirm('Delete this pomodoro?')) return;
+            await fetch(`/api/pomodoros/${id}`, { method: 'DELETE' });
+            loadHistory();
+        }
+
+        function showAddModal() {
+            document.getElementById('add-date').value = new Date().toISOString().split('T')[0];
+            document.getElementById('add-modal').classList.add('active');
+        }
+
+        function hideAddModal() {
+            document.getElementById('add-modal').classList.remove('active');
+        }
+
+        async function addManualPomodoro() {
+            const name = document.getElementById('add-name').value.trim();
+            if (!name) return alert('Please enter a description');
+
+            const date = document.getElementById('add-date').value;
+            const time = document.getElementById('add-time').value;
+            const duration = parseInt(document.getElementById('add-duration').value);
+
+            const startTime = new Date(`${date}T${time}`);
+            const endTime = new Date(startTime.getTime() + duration * 60000);
+
+            await fetch('/api/pomodoros/manual', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    name,
+                    type: document.getElementById('add-type').value,
+                    start_time: startTime.toISOString(),
+                    end_time: endTime.toISOString(),
+                    duration_minutes: duration
+                })
+            });
+
+            hideAddModal();
+            document.getElementById('add-name').value = '';
+            loadHistory();
+        }
+
+        // Reports
+        document.querySelectorAll('.period-selector button').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.period-selector button').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                currentPeriod = btn.dataset.period;
+                loadReport();
+            });
+        });
+
+        function navigatePeriod(dir) {
+            const d = new Date(currentDate);
+            if (currentPeriod === 'day') d.setDate(d.getDate() + dir);
+            else if (currentPeriod === 'week') d.setDate(d.getDate() + dir * 7);
+            else d.setMonth(d.getMonth() + dir);
+            currentDate = d.toISOString().split('T')[0];
+            loadReport();
+        }
+
+        async function loadReport() {
+            const res = await fetch(`/api/reports/${currentPeriod}?date=${currentDate}`);
+            const data = await res.json();
+
+            // Update summary
+            document.getElementById('report-count').textContent = data.total_pomodoros;
+            const hours = Math.floor(data.total_minutes / 60);
+            const mins = data.total_minutes % 60;
+            document.getElementById('report-time').textContent = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
+            document.getElementById('report-avg').textContent = data.total_pomodoros > 0
+                ? Math.round(data.total_minutes / data.total_pomodoros) + 'm' : '0m';
+
+            // Update period label
+            const d = new Date(currentDate);
+            let label = '';
+            if (currentPeriod === 'day') {
+                label = d.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
+            } else if (currentPeriod === 'week') {
+                const start = new Date(d);
+                start.setDate(d.getDate() - d.getDay());
+                const end = new Date(start);
+                end.setDate(start.getDate() + 6);
+                label = `${start.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} - ${end.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`;
+            } else {
+                label = d.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+            }
+            document.getElementById('period-label').textContent = label;
+
+            // Type chart
+            const typeLabels = Object.keys(data.by_type).filter(k => data.by_type[k] > 0);
+            const typeData = typeLabels.map(k => data.by_type[k]);
+            const typeColors = typeLabels.map(k => TYPE_COLORS[k] || '#6b7280');
+
+            if (typeChart) typeChart.destroy();
+            typeChart = new Chart(document.getElementById('chart-type'), {
+                type: 'pie',
+                data: {
+                    labels: typeLabels,
+                    datasets: [{ data: typeData, backgroundColor: typeColors }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'right', labels: { color: '#a0a0a0' } } }
+                }
+            });
+
+            // Daily chart
+            if (dailyChart) dailyChart.destroy();
+            dailyChart = new Chart(document.getElementById('chart-daily'), {
+                type: 'bar',
+                data: {
+                    labels: data.daily_totals.map(d => {
+                        const dt = new Date(d.date);
+                        return dt.toLocaleDateString(undefined, { weekday: 'short' });
+                    }),
+                    datasets: [{
+                        label: 'Minutes',
+                        data: data.daily_totals.map(d => d.minutes),
+                        backgroundColor: 'rgba(233, 69, 96, 0.7)'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { ticks: { color: '#a0a0a0' }, grid: { color: '#1a1a2e' } },
+                        y: { ticks: { color: '#a0a0a0' }, grid: { color: '#1a1a2e' } }
+                    }
+                }
+            });
+        }
+
+        // Settings
+        async function loadSettings() {
+            const res = await fetch('/api/settings');
+            settings = await res.json();
+            document.getElementById('work-duration').value = settings.work_duration_minutes;
+            document.getElementById('work-value').textContent = settings.work_duration_minutes + ' min';
+            document.getElementById('short-break').value = settings.short_break_minutes;
+            document.getElementById('break-value').textContent = settings.short_break_minutes + ' min';
+            remainingSeconds = settings.work_duration_minutes * 60;
+            totalSeconds = remainingSeconds;
+            updateTimerDisplay();
+        }
+
+        document.getElementById('work-duration').addEventListener('input', e => {
+            document.getElementById('work-value').textContent = e.target.value + ' min';
+        });
+        document.getElementById('short-break').addEventListener('input', e => {
+            document.getElementById('break-value').textContent = e.target.value + ' min';
+        });
+
+        async function saveSettings() {
+            settings.work_duration_minutes = parseInt(document.getElementById('work-duration').value);
+            settings.short_break_minutes = parseInt(document.getElementById('short-break').value);
+            await fetch('/api/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(settings)
+            });
+            remainingSeconds = settings.work_duration_minutes * 60;
+            totalSeconds = remainingSeconds;
+            updateTimerDisplay();
+            alert('Settings saved!');
+        }
+
+        // Utility
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Request notification permission
+        if ('Notification' in window && Notification.permission === 'default') {
+            Notification.requestPermission();
+        }
+
+        // Init
+        loadSettings();
+    </script>
+</body>
+</html>

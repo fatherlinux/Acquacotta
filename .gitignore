@@ -1,10 +1,12 @@
-# Dependencies
-node_modules/
-.npm/
-
-# Build outputs
-dist/
-src-tauri/target/
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+ENV/
+.venv/
 
 # Flatpak build
 .flatpak-builder/
@@ -22,14 +24,5 @@ repo/
 .DS_Store
 Thumbs.db
 
-# Logs
-*.log
-npm-debug.log*
-
-# Runtime data
-*.pid
-*.seed
-*.pid.lock
-
-# Cargo
-cargo/
+# App data
+*.db
