@@ -9,8 +9,9 @@ import uuid
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from flask import Flask, g, jsonify, redirect, render_template, request, session
+from flask import Flask, g, jsonify, redirect, render_template, request, session, url_for
 from flask_session import Session
+from werkzeug.middleware.proxy_fix import ProxyFix
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
@@ -23,6 +24,7 @@ sync_in_progress = False
 last_sync_error = None
 
 app = Flask(__name__)
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1)
 
 # Session configuration
 app.config["SECRET_KEY"] = os.environ.get("FLASK_SECRET_KEY", "dev-secret-key-change-in-prod")
@@ -332,7 +334,7 @@ def get_google_flow():
             }
         },
         scopes=SCOPES,
-        redirect_uri="http://localhost:5000/auth/callback",
+        redirect_uri=url_for("auth_callback", _external=True),
     )
 
 
