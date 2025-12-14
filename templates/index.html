@@ -138,6 +138,15 @@
         .pomodoro-item {
             display: flex; justify-content: space-between; align-items: flex-start;
             padding: 1rem; background: var(--bg-secondary); border-radius: 8px; margin-bottom: 0.5rem;
+            transition: box-shadow 0.3s ease, background 0.3s ease;
+            cursor: pointer;
+        }
+        .pomodoro-item:hover {
+            background: var(--bg-tertiary);
+        }
+        .pomodoro-item.highlighted {
+            box-shadow: 0 0 0 2px var(--accent), 0 0 20px rgba(233, 69, 96, 0.3);
+            background: var(--bg-tertiary);
         }
         .pomodoro-name { font-weight: 500; }
         .pomodoro-type {
@@ -217,6 +226,8 @@
             padding-bottom: 0.5rem;
             border-bottom: 1px solid var(--bg-tertiary);
             margin-bottom: 0.5rem;
+            position: relative;
+            cursor: pointer;
         }
         .week-day-header.today {
             color: var(--accent);
@@ -229,6 +240,39 @@
             color: var(--text-secondary);
             text-transform: uppercase;
             margin-bottom: 0.25rem;
+            position: relative;
+            cursor: pointer;
+            display: inline-block;
+            padding-right: 18px;
+        }
+        .week-day-section-label:hover {
+            color: var(--text-primary);
+        }
+        .week-section-add-btn {
+            display: none;
+            position: absolute;
+            right: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 14px;
+            height: 14px;
+            border: none;
+            border-radius: 3px;
+            font-size: 9px;
+            font-weight: bold;
+            cursor: pointer;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
+            line-height: 1;
+            background: #22c55e;
+            color: white;
+        }
+        .week-day-section-label:hover .week-section-add-btn {
+            display: flex;
+        }
+        .week-section-add-btn:hover {
+            opacity: 0.8;
         }
         .week-pomo {
             font-size: 0.625rem;
@@ -238,6 +282,49 @@
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
+            position: relative;
+            cursor: pointer;
+        }
+        .week-pomo:hover {
+            overflow: visible;
+            z-index: 10;
+        }
+        .week-pomo-controls {
+            display: none;
+            position: absolute;
+            right: -2px;
+            top: 50%;
+            transform: translateY(-50%);
+            gap: 2px;
+            z-index: 20;
+        }
+        .week-pomo:hover .week-pomo-controls {
+            display: flex;
+        }
+        .week-pomo-btn {
+            width: 16px;
+            height: 16px;
+            border: none;
+            border-radius: 3px;
+            font-size: 10px;
+            font-weight: bold;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
+            line-height: 1;
+        }
+        .week-pomo-btn.add {
+            background: #22c55e;
+            color: white;
+        }
+        .week-pomo-btn.remove {
+            background: #ef4444;
+            color: white;
+        }
+        .week-pomo-btn:hover {
+            opacity: 0.8;
         }
         /* Flatpickr dark theme customizations */
         .flatpickr-calendar {
@@ -259,6 +346,18 @@
         .flatpickr-day.today { border-color: var(--accent); }
         .flatpickr-day.selected { background: var(--accent); border-color: var(--accent); }
         .flatpickr-day.prevMonthDay, .flatpickr-day.nextMonthDay { color: var(--text-secondary); }
+        /* Remove time picker highlighting */
+        .flatpickr-time { background: var(--bg-secondary); }
+        .flatpickr-time input { background: transparent; color: var(--text-primary); }
+        .flatpickr-time input:hover,
+        .flatpickr-time input:focus { background: transparent; box-shadow: none; }
+        .flatpickr-time .numInputWrapper:hover { background: transparent; }
+        .flatpickr-time .numInputWrapper span.arrowUp:after,
+        .flatpickr-time .numInputWrapper span.arrowDown:after { border-bottom-color: var(--text-secondary); border-top-color: var(--text-secondary); }
+        .flatpickr-time .numInputWrapper span:hover { background: transparent; }
+        .flatpickr-am-pm { background: transparent; color: var(--text-primary); }
+        .flatpickr-am-pm:hover, .flatpickr-am-pm:focus { background: transparent; }
+        .flatpickr-time input::selection { background: transparent; }
     </style>
 </head>
 <body>
@@ -275,12 +374,21 @@
             <div class="timer-row">
                 <!-- Weekly Overview -->
                 <div class="weekly-overview">
-                    <h3 style="text-align: center; margin-bottom: 1rem; color: var(--text-secondary);">This Week</h3>
+                    <div style="display: flex; justify-content: center; align-items: center; gap: 1rem; margin-bottom: 1rem;">
+                        <button class="secondary" onclick="navigateWeek(-1)" style="padding: 0.25rem 0.75rem;">&larr;</button>
+                        <h3 id="week-overview-label" style="margin: 0; color: var(--text-secondary); min-width: 150px; text-align: center;">This Week</h3>
+                        <button class="secondary" onclick="navigateWeek(1)" style="padding: 0.25rem 0.75rem;">&rarr;</button>
+                        <button class="secondary" onclick="goToCurrentWeek()" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" title="Go to current week">Today</button>
+                    </div>
                     <div class="week-grid" id="week-grid">
                         <!-- Days will be populated by JavaScript -->
                     </div>
                     <div class="week-chart-container" style="margin: 1rem 0;">
                         <canvas id="week-type-chart"></canvas>
+                    </div>
+                    <div style="text-align: center; color: var(--text-secondary); font-size: 0.85rem; margin-top: 0.5rem;">
+                        <span>Total Pomodoros: <span id="week-pomo-count">0</span></span>
+                        <span style="margin-left: 1.5rem;">Total Minutes: <span id="week-minutes-count">0</span></span>
                     </div>
                 </div>
 
@@ -297,10 +405,10 @@
                         </div>
                     </div>
                     <div class="duration-presets" id="duration-presets">
-                        <button data-minutes="5">5 min</button>
-                        <button data-minutes="10">10 min</button>
-                        <button data-minutes="15">15 min</button>
-                        <button data-minutes="25" class="active">25 min</button>
+                        <button data-preset="1">5 min</button>
+                        <button data-preset="2">10 min</button>
+                        <button data-preset="3">15 min</button>
+                        <button data-preset="4" class="active">25 min</button>
                     </div>
                     <!-- Pomodoro Details -->
                     <div class="timer-details">
@@ -349,6 +457,7 @@
                 <button class="secondary" onclick="navigatePeriod(-1)">&larr;</button>
                 <span id="period-label" style="min-width: 200px; text-align: center;"></span>
                 <button class="secondary" onclick="navigatePeriod(1)">&rarr;</button>
+                <button class="secondary" onclick="goToCurrentPeriod()" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" title="Go to current period">Today</button>
             </div>
             <div class="summary-cards">
                 <div class="card summary-card">
@@ -369,7 +478,7 @@
                 <div class="chart-container"><canvas id="chart-type"></canvas></div>
             </div>
             <div class="card">
-                <h3>Daily Activity</h3>
+                <h3>Daily Activity (Minutes)</h3>
                 <div class="chart-container"><canvas id="chart-daily"></canvas></div>
             </div>
         </div>
@@ -410,20 +519,68 @@
                 </div>
             </div>
             <div class="card">
-                <h3>Timer Durations</h3>
+                <h3>Timer Presets</h3>
                 <div class="setting-row">
                     <div class="setting-label">
-                        <span>Work Duration</span>
-                        <span id="work-value" class="setting-value">25 min</span>
+                        <span>Preset 1</span>
+                        <span id="preset1-value" class="setting-value">5 min</span>
                     </div>
-                    <input type="range" id="work-duration" min="1" max="60" value="25">
+                    <input type="range" id="preset1-duration" min="1" max="60" value="5">
                 </div>
                 <div class="setting-row">
                     <div class="setting-label">
+                        <span>Preset 2</span>
+                        <span id="preset2-value" class="setting-value">10 min</span>
+                    </div>
+                    <input type="range" id="preset2-duration" min="1" max="60" value="10">
+                </div>
+                <div class="setting-row">
+                    <div class="setting-label">
+                        <span>Preset 3</span>
+                        <span id="preset3-value" class="setting-value">15 min</span>
+                    </div>
+                    <input type="range" id="preset3-duration" min="1" max="60" value="15">
+                </div>
+                <div class="setting-row">
+                    <div class="setting-label">
+                        <span>Preset 4</span>
+                        <span id="preset4-value" class="setting-value">25 min</span>
+                    </div>
+                    <input type="range" id="preset4-duration" min="1" max="60" value="25">
+                </div>
+            </div>
+            <div class="card">
+                <h3>Breaks</h3>
+                <div class="setting-row">
+                    <div class="setting-label">
                         <span>Short Break</span>
-                        <span id="break-value" class="setting-value">5 min</span>
+                        <span id="short-break-value" class="setting-value">5 min</span>
                     </div>
                     <input type="range" id="short-break" min="1" max="30" value="5">
+                </div>
+                <div class="setting-row">
+                    <div class="setting-label">
+                        <span>Long Break</span>
+                        <span id="long-break-value" class="setting-value">15 min</span>
+                    </div>
+                    <input type="range" id="long-break" min="1" max="60" value="15">
+                </div>
+                <div class="setting-row">
+                    <div class="setting-label">
+                        <span>Long break after</span>
+                        <span id="long-break-after-value" class="setting-value">4 pomodoros</span>
+                    </div>
+                    <input type="range" id="long-break-after" min="2" max="10" value="4">
+                </div>
+                <div class="setting-row">
+                    <label class="setting-label" style="cursor: pointer;">
+                        <span><input type="checkbox" id="always-short-break"> Always use short breaks</span>
+                    </label>
+                </div>
+                <div class="setting-row">
+                    <label class="setting-label" style="cursor: pointer;">
+                        <span><input type="checkbox" id="auto-start-after-break"> Auto-start next pomodoro after break</span>
+                    </label>
                 </div>
             </div>
             <div class="card">
@@ -434,11 +591,34 @@
                     </label>
                 </div>
                 <div class="setting-row">
+                    <label class="setting-label" style="cursor: pointer;">
+                        <span><input type="checkbox" id="tick-sound-during-breaks"> Play tick sound during breaks</span>
+                    </label>
+                </div>
+                <div class="setting-row">
+                    <label class="setting-label" style="cursor: pointer;">
+                        <span><input type="checkbox" id="bell-at-pomodoro-end" checked> Play bell at end of pomodoro</span>
+                    </label>
+                </div>
+                <div class="setting-row">
+                    <label class="setting-label" style="cursor: pointer;">
+                        <span><input type="checkbox" id="bell-at-break-end" checked> Play bell at end of break</span>
+                    </label>
+                </div>
+                <div class="setting-row">
                     <div class="setting-label">
-                        <span>Tick Volume</span>
+                        <span>Volume</span>
                         <span id="tick-volume-value" class="setting-value">50%</span>
                     </div>
                     <input type="range" id="tick-volume" min="0" max="100" value="50">
+                </div>
+            </div>
+            <div class="card">
+                <h3>Other</h3>
+                <div class="setting-row">
+                    <label class="setting-label" style="cursor: pointer;">
+                        <span><input type="checkbox" id="show-notes-field" checked> Show notes field</span>
+                    </label>
                 </div>
             </div>
             <div class="card">
@@ -454,6 +634,30 @@
                         <option value="eu">European (DD/MM/YYYY)</option>
                         <option value="iso">ISO (YYYY-MM-DD)</option>
                     </select>
+                </div>
+                <div class="setting-row">
+                    <label for="clock-format">Clock Format</label>
+                    <select id="clock-format" style="margin-top: 0.5rem;">
+                        <option value="auto">Auto (based on date format)</option>
+                        <option value="12">12-hour (AM/PM)</option>
+                        <option value="24">24-hour</option>
+                    </select>
+                </div>
+                <div class="setting-row">
+                    <label for="period-labels">Period Labels</label>
+                    <select id="period-labels" style="margin-top: 0.5rem;">
+                        <option value="auto">Auto (based on date format)</option>
+                        <option value="ampm">AM / PM</option>
+                        <option value="morning">Morning / Afternoon</option>
+                    </select>
+                </div>
+                <div class="setting-row">
+                    <label>Working Hours</label>
+                    <div style="display: flex; gap: 0.5rem; align-items: center; margin-top: 0.5rem;">
+                        <input type="text" id="working-hours-start" style="width: 100px;" placeholder="08:00">
+                        <span style="color: var(--text-secondary);">to</span>
+                        <input type="text" id="working-hours-end" style="width: 100px;" placeholder="17:00">
+                    </div>
                 </div>
             </div>
             <div class="card">
@@ -488,8 +692,8 @@
                     <input type="date" id="add-date">
                 </div>
                 <div class="form-group">
-                    <label for="add-time">Start Time</label>
-                    <input type="time" id="add-time" value="09:00" step="1800">
+                    <label>Start Time</label>
+                    <input type="text" id="add-time" placeholder="09:00">
                 </div>
             </div>
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
@@ -571,8 +775,8 @@
                     <input type="date" id="edit-date">
                 </div>
                 <div class="form-group">
-                    <label for="edit-time">Start Time</label>
-                    <input type="time" id="edit-time" step="1800">
+                    <label>Start Time</label>
+                    <input type="text" id="edit-time" placeholder="09:00">
                 </div>
             </div>
             <div class="form-group">
@@ -637,7 +841,61 @@
         let timerInterval = null;
         let sessionCount = 1;
         let clockInterval = null;
-        let settings = { work_duration_minutes: 25, short_break_minutes: 5, tick_sound_enabled: true, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, date_format: 'us' };
+        let isBreak = false;
+        let lastPomodoro = { type: null, name: null, notes: null };
+        let weekOverviewOffset = 0; // 0 = this week, -1 = last week, etc.
+        let selectedPreset = 4; // Which duration preset is selected (1-4)
+        let pomodorosCompleted = 0; // Count for long break logic
+        let settings = {
+            timer_preset_1: 5,
+            timer_preset_2: 10,
+            timer_preset_3: 15,
+            timer_preset_4: 25,
+            short_break_minutes: 5,
+            long_break_minutes: 15,
+            pomodoros_until_long_break: 4,
+            always_use_short_break: false,
+            tick_sound_enabled: true,
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            date_format: 'us',
+            auto_start_after_break: false,
+            tick_sound_during_breaks: false,
+            bell_at_pomodoro_end: true,
+            bell_at_break_end: true,
+            pomodoro_types: []
+        };
+
+        // Bell sound using Web Audio API
+        let audioContext = null;
+        function playBellSound() {
+            if (!audioContext) {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            const now = audioContext.currentTime;
+
+            // Create a bell-like sound with multiple harmonics
+            const frequencies = [523.25, 659.25, 783.99]; // C5, E5, G5 chord
+
+            frequencies.forEach((freq, i) => {
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+
+                oscillator.frequency.value = freq;
+                oscillator.type = 'sine';
+
+                // Bell envelope: quick attack, slow decay
+                const volume = (settings.tick_volume ?? 50) / 100 * 0.3;
+                gainNode.gain.setValueAtTime(0, now);
+                gainNode.gain.linearRampToValueAtTime(volume, now + 0.01);
+                gainNode.gain.exponentialRampToValueAtTime(0.001, now + 1.5);
+
+                oscillator.start(now + i * 0.05);
+                oscillator.stop(now + 1.5);
+            });
+        }
 
         // Flatpickr date picker instances
         let addDatePicker = null;
@@ -667,6 +925,59 @@
             // Initialize new instances
             addDatePicker = flatpickr('#add-date', config);
             editDatePicker = flatpickr('#edit-date', config);
+        }
+
+        // Time picker instances
+        let addTimePicker = null;
+        let editTimePicker = null;
+        let workingHoursStartPicker = null;
+        let workingHoursEndPicker = null;
+
+        function initTimePickers() {
+            // Determine if we should use 12-hour format
+            const is12Hour = settings.clock_format === '12' ||
+                             (settings.clock_format !== '24' && settings.date_format === 'us');
+
+            const timeConfig = {
+                enableTime: true,
+                noCalendar: true,
+                dateFormat: 'H:i',  // Always store in 24-hour format
+                altInput: true,
+                altFormat: is12Hour ? 'h:i K' : 'H:i',  // Display format based on setting
+                time_24hr: !is12Hour,
+                minuteIncrement: 30,
+                disableMobile: true
+            };
+
+            // Destroy existing instances if they exist
+            if (addTimePicker) addTimePicker.destroy();
+            if (editTimePicker) editTimePicker.destroy();
+            if (workingHoursStartPicker) workingHoursStartPicker.destroy();
+            if (workingHoursEndPicker) workingHoursEndPicker.destroy();
+
+            // Initialize new instances
+            addTimePicker = flatpickr('#add-time', {
+                ...timeConfig,
+                defaultDate: '09:00',
+                onChange: function() { updateAddPreview(); }
+            });
+            editTimePicker = flatpickr('#edit-time', timeConfig);
+            workingHoursStartPicker = flatpickr('#working-hours-start', {
+                ...timeConfig,
+                defaultDate: settings.working_hours_start || '08:00',
+                onChange: function(selectedDates, dateStr) {
+                    settings.working_hours_start = dateStr;
+                    autoSaveSettings();
+                }
+            });
+            workingHoursEndPicker = flatpickr('#working-hours-end', {
+                ...timeConfig,
+                defaultDate: settings.working_hours_end || '17:00',
+                onChange: function(selectedDates, dateStr) {
+                    settings.working_hours_end = dateStr;
+                    autoSaveSettings();
+                }
+            });
         }
 
         // Date formatting helper
@@ -739,11 +1050,22 @@
             const tz = settings.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
             const now = new Date();
 
+            // Determine 12-hour or 24-hour format
+            let hour12;
+            if (settings.clock_format === '12') {
+                hour12 = true;
+            } else if (settings.clock_format === '24') {
+                hour12 = false;
+            } else {
+                // Auto: use 12-hour for US, 24-hour for EU/ISO
+                hour12 = settings.date_format === 'us';
+            }
+
             const timeOptions = {
                 hour: '2-digit',
                 minute: '2-digit',
                 second: '2-digit',
-                hour12: true,
+                hour12: hour12,
                 timeZone: tz
             };
             const dateOptions = {
@@ -764,6 +1086,16 @@
         }
 
         // Weekly Overview functions
+        function navigateWeek(dir) {
+            weekOverviewOffset += dir;
+            loadWeeklyOverview();
+        }
+
+        function goToCurrentWeek() {
+            weekOverviewOffset = 0;
+            loadWeeklyOverview();
+        }
+
         async function loadWeeklyOverview() {
             const tz = settings.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
             const now = new Date();
@@ -771,7 +1103,7 @@
             // US = Sunday first, EU/ISO = Monday first
             const sundayFirst = settings.date_format === 'us';
 
-            // Get start of week
+            // Get start of current week
             const startOfWeek = new Date(now);
             if (sundayFirst) {
                 // Sunday first: go back to Sunday (getDay() = 0 for Sunday)
@@ -784,9 +1116,27 @@
             }
             startOfWeek.setHours(0, 0, 0, 0);
 
+            // Apply week offset
+            startOfWeek.setDate(startOfWeek.getDate() + (weekOverviewOffset * 7));
+
             // Get end of week (7 days later)
             const endOfWeek = new Date(startOfWeek);
             endOfWeek.setDate(startOfWeek.getDate() + 7);
+
+            // Update week label
+            const weekLabel = document.getElementById('week-overview-label');
+            if (weekOverviewOffset === 0) {
+                weekLabel.textContent = 'This Week';
+            } else if (weekOverviewOffset === -1) {
+                weekLabel.textContent = 'Last Week';
+            } else {
+                // Format date range
+                const startMonth = startOfWeek.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                const endDate = new Date(endOfWeek);
+                endDate.setDate(endDate.getDate() - 1); // End of week is exclusive, so subtract 1
+                const endMonth = endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                weekLabel.textContent = `${startMonth} - ${endMonth}`;
+            }
 
             const startISO = startOfWeek.toISOString();
             const endISO = endOfWeek.toISOString();
@@ -834,22 +1184,37 @@
                     return h >= 12;
                 });
 
+                // Determine period labels based on setting
+                // Auto: US = AM/PM, EU/ISO = Morning/Afternoon
+                const useMorningLabels = settings.period_labels === 'morning' ||
+                    (settings.period_labels !== 'ampm' && settings.date_format !== 'us');
+                const amLabel = useMorningLabels ? 'Morning' : 'AM';
+                const pmLabel = useMorningLabels ? 'Afternoon' : 'PM';
+
                 html += `<div class="week-day">
-                    <div class="week-day-header ${isToday ? 'today' : ''}">${days[i]} ${dayNum}</div>
-                    <div class="week-day-section">
-                        <div class="week-day-section-label">AM</div>
-                        ${renderDayPomos(amPomos)}
+                    <div class="week-day-header ${isToday ? 'today' : ''}">
+                        ${days[i]} ${dayNum}
                     </div>
                     <div class="week-day-section">
-                        <div class="week-day-section-label">PM</div>
-                        ${renderDayPomos(pmPomos)}
+                        <div class="week-day-section-label" onclick="addPomoToNextSlot('${dayStr}', true)">
+                            ${amLabel}
+                            <button class="week-section-add-btn" title="Add to next available slot">+</button>
+                        </div>
+                        ${renderDayPomos(amPomos, dayStr, true)}
+                    </div>
+                    <div class="week-day-section">
+                        <div class="week-day-section-label" onclick="addPomoToNextSlot('${dayStr}', false)">
+                            ${pmLabel}
+                            <button class="week-section-add-btn" title="Add to next available slot">+</button>
+                        </div>
+                        ${renderDayPomos(pmPomos, dayStr, false)}
                     </div>
                 </div>`;
             }
             grid.innerHTML = html;
         }
 
-        function renderDayPomos(pomos) {
+        function renderDayPomos(pomos, dayStr, isAM) {
             if (pomos.length === 0) return '<div style="color: var(--text-secondary); font-size: 0.625rem;">—</div>';
 
             // Sort pomodoros by start time first
@@ -857,19 +1222,21 @@
                 new Date(a.start_time) - new Date(b.start_time)
             );
 
-            // Group by type + name, tracking earliest time for each group
+            // Group by type + name, tracking earliest time and all IDs for each group
             const byTypeAndName = {};
             sortedPomos.forEach(p => {
-                const key = `${p.type}|||${p.name}`;
+                const key = `${p.type}|||${p.name || ''}`;
                 if (!byTypeAndName[key]) {
                     byTypeAndName[key] = {
                         type: p.type,
-                        name: p.name,
+                        name: p.name || '',
                         count: 0,
-                        earliestTime: p.start_time
+                        earliestTime: p.start_time,
+                        ids: []
                     };
                 }
                 byTypeAndName[key].count++;
+                byTypeAndName[key].ids.push({ id: p.id, start_time: p.start_time });
             });
 
             // Sort groups by earliest time
@@ -884,14 +1251,212 @@
                 const label = item.count > 1
                     ? `${displayName}: ${item.count}`
                     : displayName;
-                html += `<div class="week-pomo" style="background: ${color}30; color: ${color};" title="${item.type}: ${item.name || '(no name)'}">${label}</div>`;
+                // Sort IDs by start_time descending so we can delete latest first
+                const sortedIds = item.ids.sort((a, b) => new Date(b.start_time) - new Date(a.start_time));
+                const idsJson = JSON.stringify(sortedIds.map(i => i.id)).replace(/"/g, '&quot;');
+                const typeEsc = item.type.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                const nameEsc = item.name.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                // Get the latest pomodoro ID for navigation
+                const latestId = sortedIds[0].id.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                html += `<div class="week-pomo" style="background: ${color}30; color: ${color};" title="${item.type}: ${item.name || '(no name)'}" onclick="navigateToPomodoro('${latestId}')">
+                    <span class="week-pomo-label">${label}</span>
+                    <div class="week-pomo-controls">
+                        <button class="week-pomo-btn remove" onclick="event.stopPropagation(); decrementPomoBlock(${idsJson})" title="Remove latest">−</button>
+                        <button class="week-pomo-btn add" onclick="event.stopPropagation(); incrementPomoBlock('${typeEsc}', '${nameEsc}', '${dayStr}', ${isAM})" title="Add another">+</button>
+                    </div>
+                </div>`;
             }
             return html;
+        }
+
+        // Add a pomodoro of the same type/name on the specified day in a free slot
+        async function incrementPomoBlock(type, name, dayStr, isAM) {
+            // Get the selected duration from settings
+            const duration = settings[`timer_preset_${selectedPreset}`] || 25;
+
+            // Use working hours settings
+            const workStart = settings.working_hours_start || '08:00';
+            const workEnd = settings.working_hours_end || '17:00';
+            const [workStartHour, workStartMin] = workStart.split(':').map(Number);
+            const [workEndHour, workEndMin] = workEnd.split(':').map(Number);
+
+            // Find a free time slot on that day
+            // For AM: try slots from working hours start to 12:00 (every 30 min)
+            // For PM: try slots from 12:00 to working hours end (every 30 min)
+            const startHour = isAM ? workStartHour : 12;
+            const startMin = isAM ? workStartMin : 0;
+            const endHour = isAM ? 12 : workEndHour;
+            const endMin = isAM ? 0 : workEndMin;
+
+            // Fetch existing pomodoros for that day to find free slots
+            const dayStart = new Date(dayStr + 'T00:00:00');
+            const dayEnd = new Date(dayStr + 'T23:59:59');
+
+            try {
+                const res = await fetch(`/api/pomodoros?start_date=${dayStart.toISOString()}&end_date=${dayEnd.toISOString()}`);
+                const existingPomos = await res.json();
+
+                // Find occupied time ranges
+                const occupied = existingPomos.map(p => ({
+                    start: new Date(p.start_time),
+                    end: new Date(p.end_time)
+                }));
+
+                // Try to find a free slot (every 30 min)
+                let freeSlotStart = null;
+                const startTimeMinutes = startHour * 60 + startMin;
+                const endTimeMinutes = endHour * 60 + endMin;
+
+                for (let timeMinutes = startTimeMinutes; timeMinutes < endTimeMinutes; timeMinutes += 30) {
+                    const hour = Math.floor(timeMinutes / 60);
+                    const min = timeMinutes % 60;
+                    const slotStart = new Date(dayStr + 'T' + String(hour).padStart(2, '0') + ':' + String(min).padStart(2, '0') + ':00');
+                    const slotEnd = new Date(slotStart.getTime() + duration * 60 * 1000);
+
+                    // Check if this slot overlaps with any existing pomodoro
+                    const isOccupied = occupied.some(o =>
+                        (slotStart < o.end && slotEnd > o.start)
+                    );
+
+                    if (!isOccupied) {
+                        freeSlotStart = slotStart;
+                        break;
+                    }
+                }
+
+                if (!freeSlotStart) {
+                    return;
+                }
+
+                const endTime = new Date(freeSlotStart.getTime() + duration * 60 * 1000);
+
+                // Create the pomodoro using the manual endpoint
+                const response = await fetch('/api/pomodoros/manual', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        type: type,
+                        name: name,
+                        start_time: freeSlotStart.toISOString(),
+                        end_time: endTime.toISOString(),
+                        duration_minutes: duration
+                    })
+                });
+
+                if (response.ok) {
+                    await loadWeeklyOverview();
+                }
+            } catch (e) {
+                console.error('Error adding pomodoro:', e);
+            }
+        }
+
+        // Delete the latest pomodoro from a group (first ID in the array is the latest)
+        async function decrementPomoBlock(ids) {
+            if (!ids || ids.length === 0) return;
+
+            // The first ID is the latest (sorted by start_time descending)
+            const latestId = ids[0];
+
+            try {
+                const response = await fetch(`/api/pomodoros/${latestId}`, {
+                    method: 'DELETE'
+                });
+
+                if (response.ok) {
+                    await loadWeeklyOverview();
+                }
+            } catch (e) {
+                console.error('Error deleting pomodoro:', e);
+            }
+        }
+
+        // Add a pomodoro to the next available slot in morning or afternoon
+        async function addPomoToNextSlot(dayStr, isMorning) {
+            // Get the selected duration from settings
+            const duration = settings[`timer_preset_${selectedPreset}`] || 25;
+
+            // Use working hours settings
+            const workStart = settings.working_hours_start || '08:00';
+            const workEnd = settings.working_hours_end || '17:00';
+            const [workStartHour, workStartMin] = workStart.split(':').map(Number);
+            const [workEndHour, workEndMin] = workEnd.split(':').map(Number);
+
+            // For Morning: from working hours start to 12:00
+            // For Afternoon: from 12:00 to working hours end
+            const startHour = isMorning ? workStartHour : 12;
+            const startMin = isMorning ? workStartMin : 0;
+            const endHour = isMorning ? 12 : workEndHour;
+            const endMin = isMorning ? 0 : workEndMin;
+
+            // Fetch existing pomodoros for that day to find free slots
+            const dayStart = new Date(dayStr + 'T00:00:00');
+            const dayEnd = new Date(dayStr + 'T23:59:59');
+
+            try {
+                const res = await fetch(`/api/pomodoros?start_date=${dayStart.toISOString()}&end_date=${dayEnd.toISOString()}`);
+                const existingPomos = await res.json();
+
+                // Find occupied time ranges
+                const occupied = existingPomos.map(p => ({
+                    start: new Date(p.start_time),
+                    end: new Date(p.end_time)
+                }));
+
+                // Try to find a free slot (every 30 min)
+                let freeSlotTime = null;
+                const startTimeMinutes = startHour * 60 + startMin;
+                const endTimeMinutes = endHour * 60 + endMin;
+
+                for (let timeMinutes = startTimeMinutes; timeMinutes < endTimeMinutes; timeMinutes += 30) {
+                    const hour = Math.floor(timeMinutes / 60);
+                    const min = timeMinutes % 60;
+                    const slotStart = new Date(dayStr + 'T' + String(hour).padStart(2, '0') + ':' + String(min).padStart(2, '0') + ':00');
+                    const slotEnd = new Date(slotStart.getTime() + duration * 60 * 1000);
+
+                    // Check if this slot overlaps with any existing pomodoro
+                    const isOccupied = occupied.some(o =>
+                        (slotStart < o.end && slotEnd > o.start)
+                    );
+
+                    if (!isOccupied) {
+                        freeSlotTime = String(hour).padStart(2, '0') + ':' + String(min).padStart(2, '0');
+                        break;
+                    }
+                }
+
+                // Open add modal with the date and time pre-filled
+                const date = new Date(dayStr + 'T' + (freeSlotTime || workStart) + ':00');
+                if (addDatePicker) {
+                    addDatePicker.setDate(date, true);
+                }
+                if (addTimePicker) {
+                    addTimePicker.setDate(freeSlotTime || workStart, true);
+                }
+                document.getElementById('add-count').value = '1';
+                document.getElementById('add-duration').value = duration;
+                document.getElementById('add-error').style.display = 'none';
+                updateAddPreview();
+                document.getElementById('add-modal').classList.add('active');
+
+                // Load existing pomodoros for conflict checking
+                existingPomodoros = existingPomos;
+            } catch (e) {
+                console.error('Error finding slot:', e);
+                // Fall back to opening modal with default time
+                showAddModalForDate(dayStr);
+            }
         }
 
         let weekTypeChart = null;
 
         function renderWeeklySummary(pomodoros) {
+            // Update total counts
+            const totalPomos = pomodoros.length;
+            const totalMinutes = pomodoros.reduce((sum, p) => sum + (p.duration_minutes || 0), 0);
+            document.getElementById('week-pomo-count').textContent = totalPomos;
+            document.getElementById('week-minutes-count').textContent = totalMinutes;
+
             // Count by type
             const byType = {};
             pomodoros.forEach(p => {
@@ -928,7 +1493,43 @@
                         data: typeData,
                         backgroundColor: typeColors,
                         borderWidth: 2,
-                        borderColor: 'var(--bg-secondary)'
+                        borderColor: 'var(--bg-secondary)',
+                        datalabels: {
+                            labels: {
+                                // Count inside the slice
+                                count: {
+                                    color: '#fff',
+                                    font: {
+                                        weight: 'bold',
+                                        size: 12
+                                    },
+                                    textStrokeColor: '#000',
+                                    textStrokeWidth: 2,
+                                    formatter: (value) => value,
+                                    anchor: 'center',
+                                    align: 'center',
+                                    display: (ctx) => {
+                                        // Only show if slice is large enough (> 5% of total)
+                                        const value = ctx.dataset.data[ctx.dataIndex];
+                                        const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
+                                        return (value / total) > 0.05;
+                                    }
+                                },
+                                // Type name outside the slice
+                                name: {
+                                    color: (ctx) => typeColors[ctx.dataIndex] || '#fff',
+                                    font: {
+                                        weight: 'bold',
+                                        size: 11
+                                    },
+                                    formatter: (value, ctx) => ctx.chart.data.labels[ctx.dataIndex],
+                                    anchor: 'end',
+                                    align: 'end',
+                                    offset: 8,
+                                    textAlign: 'center'
+                                }
+                            }
+                        }
                     }]
                 },
                 plugins: [ChartDataLabels],
@@ -941,22 +1542,6 @@
                     plugins: {
                         legend: {
                             display: false
-                        },
-                        datalabels: {
-                            color: (ctx) => typeColors[ctx.dataIndex] || '#fff',
-                            font: {
-                                weight: 'bold',
-                                size: 11
-                            },
-                            formatter: (value, ctx) => {
-                                // Use full label
-                                return ctx.chart.data.labels[ctx.dataIndex];
-                            },
-                            anchor: 'end',
-                            align: 'end',
-                            offset: 8,
-                            textAlign: 'center',
-                            clamp: true
                         },
                         tooltip: {
                             callbacks: {
@@ -1036,14 +1621,15 @@
             const progress = (totalSeconds - remainingSeconds) / totalSeconds;
             const offset = circumference * (1 - progress);
             document.getElementById('timer-progress').style.strokeDashoffset = offset;
-            document.getElementById('session-info').textContent = `Session ${sessionCount}`;
         }
 
         function startTimer() {
             timerState = 'running';
-            totalSeconds = settings.work_duration_minutes * 60;
+            isBreak = false;
+            totalSeconds = getSelectedDuration() * 60;
             remainingSeconds = totalSeconds;
             document.getElementById('timer-status').textContent = 'Focus';
+            document.getElementById('timer-progress').classList.remove('break');
             document.getElementById('btn-start').style.display = 'none';
             document.getElementById('btn-pause').style.display = 'inline-block';
             document.getElementById('btn-stop').style.display = 'inline-block';
@@ -1062,18 +1648,65 @@
             updateTimerDisplay();
         }
 
+        function getBreakDuration() {
+            // Use long break every N pomodoros, unless always_use_short_break is set
+            if (settings.always_use_short_break) {
+                return settings.short_break_minutes;
+            }
+            if (pomodorosCompleted > 0 && pomodorosCompleted % settings.pomodoros_until_long_break === 0) {
+                return settings.long_break_minutes;
+            }
+            return settings.short_break_minutes;
+        }
+
+        function isLongBreak() {
+            if (settings.always_use_short_break) return false;
+            return pomodorosCompleted > 0 && pomodorosCompleted % settings.pomodoros_until_long_break === 0;
+        }
+
+        function startBreak() {
+            timerState = 'running';
+            isBreak = true;
+            const breakMinutes = getBreakDuration();
+            totalSeconds = breakMinutes * 60;
+            remainingSeconds = totalSeconds;
+            document.getElementById('timer-status').textContent = isLongBreak() ? 'Long Break' : 'Break';
+            document.getElementById('timer-progress').classList.add('break');
+            document.getElementById('btn-start').style.display = 'none';
+            document.getElementById('btn-pause').style.display = 'inline-block';
+            document.getElementById('btn-stop').style.display = 'inline-block';
+
+            timerInterval = setInterval(() => {
+                if (remainingSeconds > 0) {
+                    remainingSeconds--;
+                    updateTimerDisplay();
+                } else {
+                    clearInterval(timerInterval);
+                    stopTickSound();
+                    breakComplete();
+                }
+            }, 1000);
+            // Optionally play tick sound during breaks
+            if (settings.tick_sound_during_breaks) {
+                startTickSound();
+            }
+            updateTimerDisplay();
+        }
+
         function pauseTimer() {
             timerState = 'paused';
             clearInterval(timerInterval);
             stopTickSound();
-            document.getElementById('timer-status').textContent = 'Paused';
+            const breakStatus = isLongBreak() ? 'Long Break Paused' : 'Break Paused';
+            document.getElementById('timer-status').textContent = isBreak ? breakStatus : 'Paused';
             document.getElementById('btn-pause').style.display = 'none';
             document.getElementById('btn-resume').style.display = 'inline-block';
         }
 
         function resumeTimer() {
             timerState = 'running';
-            document.getElementById('timer-status').textContent = 'Focus';
+            const breakStatus = isLongBreak() ? 'Long Break' : 'Break';
+            document.getElementById('timer-status').textContent = isBreak ? breakStatus : 'Focus';
             document.getElementById('btn-resume').style.display = 'none';
             document.getElementById('btn-pause').style.display = 'inline-block';
 
@@ -1084,39 +1717,93 @@
                 } else {
                     clearInterval(timerInterval);
                     stopTickSound();
-                    timerComplete();
+                    if (isBreak) {
+                        breakComplete();
+                    } else {
+                        timerComplete();
+                    }
                 }
             }, 1000);
-            startTickSound();
+            if (!isBreak || settings.tick_sound_during_breaks) {
+                startTickSound();
+            }
         }
 
         async function stopTimer() {
             clearInterval(timerInterval);
             stopTickSound();
-            // Auto-save with the inline form values
-            const saved = await savePomodoro();
-            if (saved) {
+            if (isBreak) {
+                // Just reset if stopping during a break
                 resetTimer();
+            } else {
+                // Auto-save with the inline form values
+                const saved = await savePomodoro();
+                if (saved) {
+                    resetTimer();
+                }
             }
         }
 
         async function timerComplete() {
-            // Play notification sound
+            // Store last pomodoro details for auto-start
+            lastPomodoro = {
+                type: document.getElementById('timer-pomo-type').value,
+                name: document.getElementById('timer-pomo-name').value.trim(),
+                notes: document.getElementById('timer-pomo-notes').value.trim() || null
+            };
+
+            // Play bell sound
+            if (settings.bell_at_pomodoro_end) {
+                playBellSound();
+            }
+
+            // Increment pomodoro count for long break logic
+            pomodorosCompleted++;
+
+            // Determine break type for notification
+            const breakType = isLongBreak() ? 'long break' : 'break';
+
+            // Play notification
             if (Notification.permission === 'granted') {
-                new Notification('Pomodoro Complete!', { body: 'Great work! Time for a break.' });
+                new Notification('Pomodoro Complete!', { body: `Great work! Time for a ${breakType}.` });
             }
             // Auto-save with the inline form values
-            const saved = await savePomodoro();
-            if (saved) {
+            await savePomodoro();
+            sessionCount++;
+            // Start break automatically
+            startBreak();
+        }
+
+        function breakComplete() {
+            // Play bell sound
+            if (settings.bell_at_break_end) {
+                playBellSound();
+            }
+
+            // Play notification
+            if (Notification.permission === 'granted') {
+                new Notification('Break Complete!', { body: settings.auto_start_after_break ? 'Starting next pomodoro...' : 'Ready for the next pomodoro?' });
+            }
+
+            if (settings.auto_start_after_break && lastPomodoro.type) {
+                // Restore last pomodoro values
+                document.getElementById('timer-pomo-type').value = lastPomodoro.type;
+                document.getElementById('timer-pomo-name').value = lastPomodoro.name || '';
+                document.getElementById('timer-pomo-notes').value = lastPomodoro.notes || '';
+                // Auto-start next pomodoro
+                startTimer();
+            } else {
                 resetTimer();
             }
         }
 
         function resetTimer() {
             timerState = 'idle';
-            remainingSeconds = settings.work_duration_minutes * 60;
+            isBreak = false;
+            remainingSeconds = getSelectedDuration() * 60;
             totalSeconds = remainingSeconds;
             document.getElementById('timer-status').textContent = 'Ready';
+            document.getElementById('timer-progress').classList.remove('break');
             document.getElementById('btn-start').style.display = 'inline-block';
             document.getElementById('btn-pause').style.display = 'none';
             document.getElementById('btn-resume').style.display = 'none';
@@ -1133,14 +1820,12 @@
                 body: JSON.stringify({
                     name,
                     type: document.getElementById('timer-pomo-type').value,
-                    duration_minutes: settings.work_duration_minutes,
+                    duration_minutes: getSelectedDuration(),
                     notes: document.getElementById('timer-pomo-notes').value.trim() || null
                 })
             });
 
-            // Clear the fields for next pomodoro
-            document.getElementById('timer-pomo-name').value = '';
-            document.getElementById('timer-pomo-notes').value = '';
+            // Keep fields visible during break (stored in lastPomodoro for auto-start)
             loadWeeklyOverview(); // Refresh weekly view
             return true;
         }
@@ -1156,13 +1841,37 @@
         document.getElementById('btn-stop').addEventListener('click', stopTimer);
 
         // Duration preset buttons
+        function updatePresetButtons() {
+            document.querySelectorAll('#duration-presets button').forEach(btn => {
+                const preset = parseInt(btn.dataset.preset);
+                const minutes = settings[`timer_preset_${preset}`];
+                btn.textContent = `${minutes} min`;
+                if (preset === selectedPreset) {
+                    btn.classList.add('active');
+                } else {
+                    btn.classList.remove('active');
+                }
+            });
+        }
+
+        function updateNotesFieldVisibility() {
+            const notesField = document.getElementById('timer-pomo-notes');
+            if (notesField) {
+                notesField.style.display = settings.show_notes_field ? 'block' : 'none';
+            }
+        }
+
+        function getSelectedDuration() {
+            return settings[`timer_preset_${selectedPreset}`];
+        }
+
         document.querySelectorAll('#duration-presets button').forEach(btn => {
             btn.addEventListener('click', () => {
                 if (timerState !== 'idle') return; // Don't change duration while timer is running
                 document.querySelectorAll('#duration-presets button').forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
-                const minutes = parseInt(btn.dataset.minutes);
-                settings.work_duration_minutes = minutes;
+                selectedPreset = parseInt(btn.dataset.preset);
+                const minutes = getSelectedDuration();
                 remainingSeconds = minutes * 60;
                 totalSeconds = remainingSeconds;
                 updateTimerDisplay();
@@ -1206,7 +1915,6 @@
                                     <div class="pomodoro-meta">${time} - ${p.duration_minutes} min</div>
                                 </div>
                                 <div class="pomodoro-actions">
-                                    <button class="edit-btn" title="Edit">&#9998;</button>
                                     <button class="delete-btn" title="Delete">&#10005;</button>
                                 </div>
                             </div>
@@ -1215,15 +1923,49 @@
                 }
                 list.innerHTML = html;
 
-                // Attach event listeners for edit and delete buttons
+                // Attach event listeners - click item to edit, delete button to delete
                 list.querySelectorAll('.pomodoro-item').forEach(item => {
                     const id = item.dataset.id;
-                    item.querySelector('.edit-btn').addEventListener('click', () => showEditModal(id));
-                    item.querySelector('.delete-btn').addEventListener('click', () => deletePomodoro(id));
+                    // Click anywhere on item to edit (with highlight)
+                    item.addEventListener('click', () => {
+                        document.querySelectorAll('.pomodoro-item.highlighted').forEach(el => el.classList.remove('highlighted'));
+                        item.classList.add('highlighted');
+                        showEditModal(id);
+                    });
+                    // Delete button stops propagation so it doesn't trigger edit
+                    item.querySelector('.delete-btn').addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        deletePomodoro(id);
+                    });
                 });
             } catch (e) {
                 console.error('Error loading history:', e);
                 list.innerHTML = '<div class="empty">Error loading history. Please refresh.</div>';
+            }
+        }
+
+        // Navigate to a specific pomodoro in History tab and highlight it
+        async function navigateToPomodoro(id) {
+            // Switch to History tab
+            document.querySelectorAll('nav button').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+            document.querySelector('nav button[data-view="history"]').classList.add('active');
+            document.getElementById('history-view').classList.add('active');
+
+            // Load history and wait for it to complete
+            await loadHistory();
+
+            // Find and highlight the pomodoro
+            const item = document.querySelector(`.pomodoro-item[data-id="${CSS.escape(id)}"]`);
+            if (item) {
+                // Remove any existing highlights
+                document.querySelectorAll('.pomodoro-item.highlighted').forEach(el => el.classList.remove('highlighted'));
+
+                // Scroll to the item
+                item.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+                // Add highlight (stays until another item is clicked)
+                item.classList.add('highlighted');
             }
         }
 
@@ -1234,6 +1976,32 @@
 
         let existingPomodoros = []; // Cache for conflict checking
 
+        // Get default start time based on working hours
+        function getDefaultStartTime(now) {
+            const workStart = settings.working_hours_start || '08:00';
+            const workEnd = settings.working_hours_end || '17:00';
+
+            const [startHour, startMin] = workStart.split(':').map(Number);
+            const [endHour, endMin] = workEnd.split(':').map(Number);
+
+            const currentHour = now.getHours();
+            const currentMin = now.getMinutes();
+            const currentTimeMinutes = currentHour * 60 + currentMin;
+            const workStartMinutes = startHour * 60 + startMin;
+            const workEndMinutes = endHour * 60 + endMin;
+
+            if (currentTimeMinutes < workStartMinutes) {
+                // Before working hours: use working hours start
+                return workStart;
+            } else if (currentTimeMinutes >= workEndMinutes) {
+                // After working hours: use 12:00 noon
+                return '12:00';
+            } else {
+                // During working hours: use current time snapped to half hour
+                return formatTimeSnapped(now);
+            }
+        }
+
         function showAddModal() {
             // Use local date and time (not UTC) to avoid timezone issues
             const now = new Date();
@@ -1241,8 +2009,33 @@
             if (addDatePicker) {
                 addDatePicker.setDate(now, true);
             }
-            document.getElementById('add-time').value = formatTimeSnapped(now);
+            // Set time using Flatpickr API
+            if (addTimePicker) {
+                addTimePicker.setDate(getDefaultStartTime(now), true);
+            }
             document.getElementById('add-count').value = '1';
+            document.getElementById('add-error').style.display = 'none';
+            updateAddPreview();
+            document.getElementById('add-modal').classList.add('active');
+
+            // Load existing pomodoros for conflict checking
+            fetch('/api/pomodoros').then(r => r.json()).then(p => existingPomodoros = p);
+        }
+
+        function showAddModalForDate(dateStr) {
+            // Open the add modal with the specified date pre-filled
+            const workStart = settings.working_hours_start || '08:00';
+            const date = new Date(dateStr + 'T' + workStart + ':00');
+            // Set date using Flatpickr API
+            if (addDatePicker) {
+                addDatePicker.setDate(date, true);
+            }
+            // Set time using Flatpickr API
+            if (addTimePicker) {
+                addTimePicker.setDate(workStart, true);
+            }
+            document.getElementById('add-count').value = '1';
+            document.getElementById('add-duration').value = settings[`timer_preset_${selectedPreset}`] || 25;
             document.getElementById('add-error').style.display = 'none';
             updateAddPreview();
             document.getElementById('add-modal').classList.add('active');
@@ -1350,11 +2143,20 @@
 
         // Add event listeners for preview updates
         document.addEventListener('DOMContentLoaded', () => {
-            ['add-date', 'add-time', 'add-duration', 'add-count'].forEach(id => {
+            ['add-date', 'add-duration', 'add-count'].forEach(id => {
                 const el = document.getElementById(id);
                 if (el) {
                     el.addEventListener('input', updateAddPreview);
                     el.addEventListener('change', updateAddPreview);
+                }
+            });
+            // Time picker onChange is handled by Flatpickr in initTimePickers()
+
+            // Save edit modal on Enter key (except in textarea)
+            document.getElementById('edit-modal').addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') {
+                    e.preventDefault();
+                    saveEditedPomodoro();
                 }
             });
         });
@@ -1459,7 +2261,10 @@
             if (editDatePicker) {
                 editDatePicker.setDate(startDate, true);
             }
-            document.getElementById('edit-time').value = formatTimeSnapped(startDate);
+            // Set time using Flatpickr API
+            if (editTimePicker) {
+                editTimePicker.setDate(formatTimeSnapped(startDate), true);
+            }
 
             document.getElementById('edit-modal').classList.add('active');
         }
@@ -1514,6 +2319,12 @@
             else if (currentPeriod === 'week') d.setDate(d.getDate() + dir * 7);
             else d.setMonth(d.getMonth() + dir);
             currentDate = d.toISOString().split('T')[0];
+            loadReport();
+        }
+
+        function goToCurrentPeriod() {
+            // Use local date to avoid timezone offset issues
+            currentDate = new Date().toLocaleDateString('en-CA');
             loadReport();
         }
 
@@ -1712,7 +2523,8 @@
 
         // Helper to get date range for a period
         function getDateRange(period, dateStr) {
-            const refDate = new Date(dateStr);
+            // Parse date string as local time (not UTC) by appending time component
+            const refDate = new Date(dateStr + 'T00:00:00');
             let start, end;
 
             if (period === 'day') {
@@ -1741,20 +2553,86 @@
         async function loadSettings() {
             const res = await fetch('/api/settings');
             settings = await res.json();
-            document.getElementById('work-duration').value = settings.work_duration_minutes;
-            document.getElementById('work-value').textContent = settings.work_duration_minutes + ' min';
+
+            // Pomodoro types (ensure it's an array)
+            if (!settings.pomodoro_types || !Array.isArray(settings.pomodoro_types)) {
+                settings.pomodoro_types = [];
+            }
+
+            // Timer presets (defaults if not set)
+            settings.timer_preset_1 = settings.timer_preset_1 ?? 5;
+            settings.timer_preset_2 = settings.timer_preset_2 ?? 10;
+            settings.timer_preset_3 = settings.timer_preset_3 ?? 15;
+            settings.timer_preset_4 = settings.timer_preset_4 ?? 25;
+
+            document.getElementById('preset1-duration').value = settings.timer_preset_1;
+            document.getElementById('preset1-value').textContent = settings.timer_preset_1 + ' min';
+            document.getElementById('preset2-duration').value = settings.timer_preset_2;
+            document.getElementById('preset2-value').textContent = settings.timer_preset_2 + ' min';
+            document.getElementById('preset3-duration').value = settings.timer_preset_3;
+            document.getElementById('preset3-value').textContent = settings.timer_preset_3 + ' min';
+            document.getElementById('preset4-duration').value = settings.timer_preset_4;
+            document.getElementById('preset4-value').textContent = settings.timer_preset_4 + ' min';
+
+            // Update preset buttons on timer
+            updatePresetButtons();
+
+            // Breaks
+            settings.short_break_minutes = settings.short_break_minutes ?? 5;
+            settings.long_break_minutes = settings.long_break_minutes ?? 15;
+            settings.pomodoros_until_long_break = settings.pomodoros_until_long_break ?? 4;
+
             document.getElementById('short-break').value = settings.short_break_minutes;
-            document.getElementById('break-value').textContent = settings.short_break_minutes + ' min';
+            document.getElementById('short-break-value').textContent = settings.short_break_minutes + ' min';
+            document.getElementById('long-break').value = settings.long_break_minutes;
+            document.getElementById('long-break-value').textContent = settings.long_break_minutes + ' min';
+            document.getElementById('long-break-after').value = settings.pomodoros_until_long_break;
+            document.getElementById('long-break-after-value').textContent = settings.pomodoros_until_long_break + ' pomodoros';
+
+            // Always use short break (default to false)
+            settings.always_use_short_break = settings.always_use_short_break === true;
+            document.getElementById('always-short-break').checked = settings.always_use_short_break;
 
             // Sound enabled (default to true if not set)
             settings.tick_sound_enabled = settings.tick_sound_enabled !== false;
             document.getElementById('tick-sound-enabled').checked = settings.tick_sound_enabled;
+
+            // Auto-start after break (default to false)
+            settings.auto_start_after_break = settings.auto_start_after_break === true;
+            document.getElementById('auto-start-after-break').checked = settings.auto_start_after_break;
+
+            // Tick sound during breaks (default to false)
+            settings.tick_sound_during_breaks = settings.tick_sound_during_breaks === true;
+            document.getElementById('tick-sound-during-breaks').checked = settings.tick_sound_during_breaks;
+
+            // Show notes field (default to false)
+            settings.show_notes_field = settings.show_notes_field === true;
+            document.getElementById('show-notes-field').checked = settings.show_notes_field;
+            updateNotesFieldVisibility();
+
+            // Working hours (default to 08:00 - 17:00)
+            settings.working_hours_start = settings.working_hours_start || '08:00';
+            settings.working_hours_end = settings.working_hours_end || '17:00';
+            // Values are set in initTimePickers()
+
+            // Bell at pomodoro end (default to true)
+            settings.bell_at_pomodoro_end = settings.bell_at_pomodoro_end !== false;
+            document.getElementById('bell-at-pomodoro-end').checked = settings.bell_at_pomodoro_end;
+
+            // Bell at break end (default to true)
+            settings.bell_at_break_end = settings.bell_at_break_end !== false;
+            document.getElementById('bell-at-break-end').checked = settings.bell_at_break_end;
 
             // Sound volume (default to 50 if not set)
             const tickVolume = settings.tick_volume ?? 50;
             document.getElementById('tick-volume').value = tickVolume;
             document.getElementById('tick-volume-value').textContent = tickVolume + '%';
             settings.tick_volume = tickVolume;
+
+            // Update timer display with selected preset
+            remainingSeconds = getSelectedDuration() * 60;
+            totalSeconds = remainingSeconds;
+            updateTimerDisplay();
 
             // Timezone (default to browser timezone)
             if (!settings.timezone) {
@@ -1769,34 +2647,50 @@
             }
             document.getElementById('date-format').value = settings.date_format;
 
+            // Clock format (default to auto)
+            if (!settings.clock_format) {
+                settings.clock_format = 'auto';
+            }
+            document.getElementById('clock-format').value = settings.clock_format;
+
+            // Period labels (default to auto)
+            if (!settings.period_labels) {
+                settings.period_labels = 'auto';
+            }
+            document.getElementById('period-labels').value = settings.period_labels;
+
             // Initialize date pickers with locale-aware week start
             initDatePickers();
+
+            // Initialize time pickers
+            initTimePickers();
 
             // Populate type dropdowns and settings list
             populateTypeDropdowns();
             renderTypesList();
-
-            remainingSeconds = settings.work_duration_minutes * 60;
-            totalSeconds = remainingSeconds;
-            updateTimerDisplay();
         }
 
-        // Work duration slider - auto-save
-        document.getElementById('work-duration').addEventListener('input', e => {
-            document.getElementById('work-value').textContent = e.target.value + ' min';
-            settings.work_duration_minutes = parseInt(e.target.value);
-        });
-        document.getElementById('work-duration').addEventListener('change', e => {
-            settings.work_duration_minutes = parseInt(e.target.value);
-            remainingSeconds = settings.work_duration_minutes * 60;
-            totalSeconds = remainingSeconds;
-            updateTimerDisplay();
-            autoSaveSettings();
+        // Timer preset sliders
+        [1, 2, 3, 4].forEach(n => {
+            document.getElementById(`preset${n}-duration`).addEventListener('input', e => {
+                document.getElementById(`preset${n}-value`).textContent = e.target.value + ' min';
+                settings[`timer_preset_${n}`] = parseInt(e.target.value);
+                updatePresetButtons();
+                if (selectedPreset === n && timerState === 'idle') {
+                    remainingSeconds = parseInt(e.target.value) * 60;
+                    totalSeconds = remainingSeconds;
+                    updateTimerDisplay();
+                }
+            });
+            document.getElementById(`preset${n}-duration`).addEventListener('change', e => {
+                settings[`timer_preset_${n}`] = parseInt(e.target.value);
+                autoSaveSettings();
+            });
         });
 
-        // Short break slider - auto-save
+        // Short break slider
         document.getElementById('short-break').addEventListener('input', e => {
-            document.getElementById('break-value').textContent = e.target.value + ' min';
+            document.getElementById('short-break-value').textContent = e.target.value + ' min';
             settings.short_break_minutes = parseInt(e.target.value);
         });
         document.getElementById('short-break').addEventListener('change', e => {
@@ -1804,9 +2698,68 @@
             autoSaveSettings();
         });
 
+        // Long break slider
+        document.getElementById('long-break').addEventListener('input', e => {
+            document.getElementById('long-break-value').textContent = e.target.value + ' min';
+            settings.long_break_minutes = parseInt(e.target.value);
+        });
+        document.getElementById('long-break').addEventListener('change', e => {
+            settings.long_break_minutes = parseInt(e.target.value);
+            autoSaveSettings();
+        });
+
+        // Long break after N pomodoros slider
+        document.getElementById('long-break-after').addEventListener('input', e => {
+            document.getElementById('long-break-after-value').textContent = e.target.value + ' pomodoros';
+            settings.pomodoros_until_long_break = parseInt(e.target.value);
+        });
+        document.getElementById('long-break-after').addEventListener('change', e => {
+            settings.pomodoros_until_long_break = parseInt(e.target.value);
+            autoSaveSettings();
+        });
+
+        // Always use short break checkbox
+        document.getElementById('always-short-break').addEventListener('change', e => {
+            settings.always_use_short_break = e.target.checked;
+            autoSaveSettings();
+        });
+
         // Tick sound checkbox - auto-save
         document.getElementById('tick-sound-enabled').addEventListener('change', e => {
             settings.tick_sound_enabled = e.target.checked;
+            autoSaveSettings();
+        });
+
+        // Auto-start after break checkbox - auto-save
+        document.getElementById('auto-start-after-break').addEventListener('change', e => {
+            settings.auto_start_after_break = e.target.checked;
+            autoSaveSettings();
+        });
+
+        // Tick sound during breaks checkbox - auto-save
+        document.getElementById('tick-sound-during-breaks').addEventListener('change', e => {
+            settings.tick_sound_during_breaks = e.target.checked;
+            autoSaveSettings();
+        });
+
+        // Show notes field checkbox - auto-save
+        document.getElementById('show-notes-field').addEventListener('change', e => {
+            settings.show_notes_field = e.target.checked;
+            updateNotesFieldVisibility();
+            autoSaveSettings();
+        });
+
+        // Working hours are handled by Flatpickr onChange in initTimePickers()
+
+        // Bell at pomodoro end checkbox - auto-save
+        document.getElementById('bell-at-pomodoro-end').addEventListener('change', e => {
+            settings.bell_at_pomodoro_end = e.target.checked;
+            autoSaveSettings();
+        });
+
+        // Bell at break end checkbox - auto-save
+        document.getElementById('bell-at-break-end').addEventListener('change', e => {
+            settings.bell_at_break_end = e.target.checked;
             autoSaveSettings();
         });
 
@@ -1833,11 +2786,26 @@
             settings.date_format = e.target.value;
             // Reinitialize date pickers with new week start day
             initDatePickers();
+            // Reinitialize time pickers (12/24 hour format may change)
+            initTimePickers();
             // Reload weekly overview to reflect new week start day
             loadWeeklyOverview();
             if (document.getElementById('history-view').classList.contains('active')) {
                 loadHistory();
             }
+            autoSaveSettings();
+        });
+
+        document.getElementById('clock-format').addEventListener('change', e => {
+            settings.clock_format = e.target.value;
+            updateClock(); // Immediately update clock display
+            initTimePickers(); // Reinitialize time pickers with new format
+            autoSaveSettings();
+        });
+
+        document.getElementById('period-labels').addEventListener('change', e => {
+            settings.period_labels = e.target.value;
+            loadWeeklyOverview(); // Reload to show new labels
             autoSaveSettings();
         });
 
@@ -1851,13 +2819,15 @@
         // Type management functions
         function populateTypeDropdowns() {
             const types = settings.pomodoro_types || [];
+            // Ensure all types are strings
+            const stringTypes = types.map(t => String(t)).filter(t => t && t.trim());
             const selects = ['pomo-type', 'add-type', 'timer-pomo-type', 'edit-type'];
             selects.forEach(id => {
                 const select = document.getElementById(id);
                 if (!select) return;
                 const currentValue = select.value;
-                select.innerHTML = types.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('');
-                if (currentValue && types.includes(currentValue)) {
+                select.innerHTML = stringTypes.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('');
+                if (currentValue && stringTypes.includes(currentValue)) {
                     select.value = currentValue;
                 }
             });

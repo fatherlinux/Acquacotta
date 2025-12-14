@@ -51,16 +51,16 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 DEFAULT_DB_PATH = DATA_DIR / "pomodoros.db"  # For non-logged-in users
 
 DEFAULT_POMODORO_TYPES = [
-    "Product",
-    "Customer/Partner/Community",
     "Content",
-    "Team",
-    "Social Media",
-    "Unqueued",
-    "Queued",
+    "Customer/Partner/Community",
     "Learn/Train",
-    "Travel",
+    "Product",
     "PTO",
+    "Queued",
+    "Social Media",
+    "Team",
+    "Travel",
+    "Unqueued",
 ]
 
 
@@ -279,13 +279,26 @@ def sync_from_sheets(db_path, credentials_dict, spreadsheet_id):
 
     # Get settings from Google Sheets
     defaults = {
-        "work_duration_minutes": 25,
+        "timer_preset_1": 5,
+        "timer_preset_2": 10,
+        "timer_preset_3": 15,
+        "timer_preset_4": 25,
         "short_break_minutes": 5,
         "long_break_minutes": 15,
         "pomodoros_until_long_break": 4,
+        "always_use_short_break": False,
         "sound_enabled": True,
         "notifications_enabled": True,
         "pomodoro_types": DEFAULT_POMODORO_TYPES,
+        "auto_start_after_break": False,
+        "tick_sound_during_breaks": False,
+        "bell_at_pomodoro_end": True,
+        "bell_at_break_end": True,
+        "show_notes_field": False,
+        "working_hours_start": "08:00",
+        "working_hours_end": "17:00",
+        "clock_format": "auto",
+        "period_labels": "auto",
     }
     settings = sheets_storage.get_settings(service, spreadsheet_id, defaults)
 
@@ -673,13 +686,26 @@ def create_manual_pomodoro():
 def get_settings():
     """Get user settings from SQLite cache."""
     defaults = {
-        "work_duration_minutes": 25,
+        "timer_preset_1": 5,
+        "timer_preset_2": 10,
+        "timer_preset_3": 15,
+        "timer_preset_4": 25,
         "short_break_minutes": 5,
         "long_break_minutes": 15,
         "pomodoros_until_long_break": 4,
+        "always_use_short_break": False,
         "sound_enabled": True,
         "notifications_enabled": True,
         "pomodoro_types": DEFAULT_POMODORO_TYPES,
+        "auto_start_after_break": False,
+        "tick_sound_during_breaks": False,
+        "bell_at_pomodoro_end": True,
+        "bell_at_break_end": True,
+        "show_notes_field": False,
+        "working_hours_start": "08:00",
+        "working_hours_end": "17:00",
+        "clock_format": "auto",
+        "period_labels": "auto",
     }
 
     # Always read from SQLite (fast local cache)
@@ -999,13 +1025,26 @@ def migrate_data():
     elif settings_direction == "sheets_to_local":
         # Pull Google Sheets settings to local
         defaults = {
-            "work_duration_minutes": 25,
+            "timer_preset_1": 5,
+            "timer_preset_2": 10,
+            "timer_preset_3": 15,
+            "timer_preset_4": 25,
             "short_break_minutes": 5,
             "long_break_minutes": 15,
             "pomodoros_until_long_break": 4,
+            "always_use_short_break": False,
             "sound_enabled": True,
             "notifications_enabled": True,
             "pomodoro_types": DEFAULT_POMODORO_TYPES,
+            "auto_start_after_break": False,
+            "tick_sound_during_breaks": False,
+            "bell_at_pomodoro_end": True,
+            "bell_at_break_end": True,
+            "show_notes_field": False,
+            "working_hours_start": "08:00",
+            "working_hours_end": "17:00",
+            "clock_format": "auto",
+            "period_labels": "auto",
         }
         sheets_settings = sheets_storage.get_settings(service, spreadsheet_id, defaults)
         for key, value in sheets_settings.items():
