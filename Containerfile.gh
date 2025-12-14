@@ -1,0 +1,3 @@
+FROM registry.fedoraproject.org/fedora:latest
+RUN dnf install -y gh git && dnf clean all
+ENTRYPOINT ["gh"]
