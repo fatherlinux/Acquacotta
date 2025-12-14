@@ -1,23 +1,27 @@
-FROM registry.access.redhat.com/ubi9/python-312:latest
+FROM registry.access.redhat.com/ubi10/ubi:latest
 
-USER 0
+RUN dnf install -y python3.12 python3.12-pip httpd mod_ssl && dnf clean all
 
 WORKDIR /app
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip3.12 install --no-cache-dir -r requirements.txt
 
 COPY app.py .
 COPY sheets_storage.py .
 COPY templates/ templates/
 COPY static/ static/
 
-RUN chown -R 1001:0 /app && chmod -R g=u /app
+# Apache SSL reverse proxy configuration
+COPY static/acquacotta-ssl.conf /etc/httpd/conf.d/acquacotta-ssl.conf
+RUN rm -f /etc/httpd/conf.d/ssl.conf
 
-USER 1001
+# Entrypoint script
+COPY static/entrypoint.sh /entrypoint.sh
+RUN chmod 755 /entrypoint.sh
 
-EXPOSE 5000
+ENV FLASK_HOST=127.0.0.1
 
-ENV FLASK_HOST=0.0.0.0
+EXPOSE 443
 
-CMD ["python", "app.py"]
+CMD ["/entrypoint.sh"]
