@@ -299,6 +299,7 @@ def sync_from_sheets(db_path, credentials_dict, spreadsheet_id):
         "working_hours_end": "17:00",
         "clock_format": "auto",
         "period_labels": "auto",
+        "daily_minutes_goal": 300,
     }
     settings = sheets_storage.get_settings(service, spreadsheet_id, defaults)
 
@@ -706,6 +707,7 @@ def get_settings():
         "working_hours_end": "17:00",
         "clock_format": "auto",
         "period_labels": "auto",
+        "daily_minutes_goal": 300,
     }
 
     # Always read from SQLite (fast local cache)
@@ -1045,6 +1047,7 @@ def migrate_data():
             "working_hours_end": "17:00",
             "clock_format": "auto",
             "period_labels": "auto",
+            "daily_minutes_goal": 300,
         }
         sheets_settings = sheets_storage.get_settings(service, spreadsheet_id, defaults)
         for key, value in sheets_settings.items():

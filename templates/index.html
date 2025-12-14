@@ -9,6 +9,7 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/themes/dark.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation"></script>
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
     <style>
         :root {
@@ -474,12 +475,12 @@
                 </div>
             </div>
             <div class="card">
-                <h3>By Type</h3>
-                <div class="chart-container"><canvas id="chart-type"></canvas></div>
-            </div>
-            <div class="card">
                 <h3>Daily Activity (Minutes)</h3>
                 <div class="chart-container"><canvas id="chart-daily"></canvas></div>
+            </div>
+            <div class="card">
+                <h3>By Type (Minutes)</h3>
+                <div class="chart-container"><canvas id="chart-type"></canvas></div>
             </div>
         </div>
 
@@ -658,6 +659,10 @@
                         <span style="color: var(--text-secondary);">to</span>
                         <input type="text" id="working-hours-end" style="width: 100px;" placeholder="17:00">
                     </div>
+                </div>
+                <div class="setting-row">
+                    <label for="daily-minutes-goal">Daily Minutes Goal</label>
+                    <input type="number" id="daily-minutes-goal" min="0" max="600" style="width: 100px; margin-top: 0.5rem;" placeholder="200">
                 </div>
             </div>
             <div class="card">
@@ -1495,40 +1500,16 @@
                         borderWidth: 2,
                         borderColor: 'var(--bg-secondary)',
                         datalabels: {
-                            labels: {
-                                // Count inside the slice
-                                count: {
-                                    color: '#fff',
-                                    font: {
-                                        weight: 'bold',
-                                        size: 12
-                                    },
-                                    textStrokeColor: '#000',
-                                    textStrokeWidth: 2,
-                                    formatter: (value) => value,
-                                    anchor: 'center',
-                                    align: 'center',
-                                    display: (ctx) => {
-                                        // Only show if slice is large enough (> 5% of total)
-                                        const value = ctx.dataset.data[ctx.dataIndex];
-                                        const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
-                                        return (value / total) > 0.05;
-                                    }
-                                },
-                                // Type name outside the slice
-                                name: {
-                                    color: (ctx) => typeColors[ctx.dataIndex] || '#fff',
-                                    font: {
-                                        weight: 'bold',
-                                        size: 11
-                                    },
-                                    formatter: (value, ctx) => ctx.chart.data.labels[ctx.dataIndex],
-                                    anchor: 'end',
-                                    align: 'end',
-                                    offset: 8,
-                                    textAlign: 'center'
-                                }
-                            }
+                            color: (ctx) => typeColors[ctx.dataIndex] || '#fff',
+                            font: {
+                                weight: 'bold',
+                                size: 11
+                            },
+                            formatter: (value, ctx) => `${ctx.chart.data.labels[ctx.dataIndex]}: ${value}`,
+                            anchor: 'end',
+                            align: 'end',
+                            offset: 8,
+                            textAlign: 'center'
                         }
                     }]
                 },
@@ -2393,8 +2374,8 @@
                                 size: 11
                             },
                             formatter: (value, ctx) => {
-                                // Use full label
-                                return ctx.chart.data.labels[ctx.dataIndex];
+                                // Show label with minute count
+                                return `${ctx.chart.data.labels[ctx.dataIndex]}: ${value}`;
                             },
                             anchor: 'end',
                             align: 'end',
@@ -2480,21 +2461,27 @@
                             }
                         },
                         datalabels: {
-                            color: '#fff',
-                            font: {
-                                weight: 'bold',
-                                size: 9
-                            },
-                            textStrokeColor: '#000',
-                            textStrokeWidth: 2,
-                            formatter: (value, ctx) => {
-                                // Only show label if value > 0
-                                if (value <= 0) return '';
-                                // Use first word for limited space in bar segments
-                                return ctx.dataset.shortLabel;
-                            },
-                            anchor: 'center',
-                            align: 'center'
+                            display: false
+                        },
+                        annotation: {
+                            annotations: {
+                                goalLine: {
+                                    type: 'line',
+                                    yMin: settings.daily_minutes_goal || 300,
+                                    yMax: settings.daily_minutes_goal || 300,
+                                    borderColor: '#e94560',
+                                    borderWidth: 2,
+                                    borderDash: [5, 5],
+                                    label: {
+                                        display: true,
+                                        content: 'Goal',
+                                        position: 'end',
+                                        backgroundColor: 'transparent',
+                                        color: '#e94560',
+                                        font: { size: 10 }
+                                    }
+                                }
+                            }
                         }
                     },
                     scales: {
@@ -2659,6 +2646,12 @@
             }
             document.getElementById('period-labels').value = settings.period_labels;
 
+            // Daily minutes goal (default to 300 = 12 pomodoros x 25 min)
+            if (!settings.daily_minutes_goal) {
+                settings.daily_minutes_goal = 300;
+            }
+            document.getElementById('daily-minutes-goal').value = settings.daily_minutes_goal;
+
             // Initialize date pickers with locale-aware week start
             initDatePickers();
 
@@ -2806,6 +2799,12 @@
         document.getElementById('period-labels').addEventListener('change', e => {
             settings.period_labels = e.target.value;
             loadWeeklyOverview(); // Reload to show new labels
+            autoSaveSettings();
+        });
+
+        document.getElementById('daily-minutes-goal').addEventListener('change', e => {
+            settings.daily_minutes_goal = parseInt(e.target.value) || 300;
+            loadReport(); // Reload to show updated goal line
             autoSaveSettings();
         });
 
