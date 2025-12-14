@@ -8,7 +8,9 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app.py .
+COPY sheets_storage.py .
 COPY templates/ templates/
+COPY static/ static/
 
 RUN chown -R 1001:0 /app && chmod -R g=u /app
 
