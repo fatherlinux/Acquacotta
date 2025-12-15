@@ -2962,6 +2962,12 @@
             // If logged in and needs initial sync, show sync options modal
             if (authStatus.logged_in && authStatus.needs_initial_sync) {
                 await showInitialSyncModal();
+            } else if (authStatus.logged_in) {
+                // Returning user - silently sync from Google Sheets in background
+                fetch('/api/sync/now', { method: 'POST' }).then(() => {
+                    loadWeeklyOverview();
+                    loadHistory();
+                }).catch(e => console.log('Background sync failed:', e));
             }
 
             // Always load settings (works with SQLite locally or Google Sheets when logged in)

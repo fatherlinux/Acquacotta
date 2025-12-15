@@ -491,9 +491,30 @@ def auth_callback():
                 body={"values": [["key", "value"]]},
             ).execute()
 
-    # Don't sync automatically - let user decide what to do with existing data
-    # The frontend will check needs_initial_sync and show migration dialog
-    session["needs_initial_sync"] = True
+    # Only show sync dialog if there's actually a decision to make:
+    # 1. Pre-login pomodoros exist (need to decide whether to upload them)
+    # 2. Spreadsheet is brand new (might want to upload local data)
+    # If user's spreadsheet already existed and there's no pre-login data,
+    # they've already synced before - just use the existing sync silently
+    has_prelogin_data = False
+    user_db_path = get_user_db_path()
+    print(f"[AUTH CALLBACK] user_db_path={user_db_path}, DEFAULT_DB_PATH={DEFAULT_DB_PATH}")
+    print(f"[AUTH CALLBACK] spreadsheet_existed={session.get('spreadsheet_existed')}")
+    if user_db_path != DEFAULT_DB_PATH and DEFAULT_DB_PATH.exists():
+        default_db = sqlite3.connect(DEFAULT_DB_PATH)
+        count = default_db.execute("SELECT COUNT(*) FROM pomodoros").fetchone()[0]
+        default_db.close()
+        has_prelogin_data = count > 0
+        print(f"[AUTH CALLBACK] pre-login pomodoros in default DB: {count}")
+
+    if has_prelogin_data or not session.get("spreadsheet_existed"):
+        # Pre-login data to migrate, or new spreadsheet - show dialog
+        session["needs_initial_sync"] = True
+        print(f"[AUTH CALLBACK] Setting needs_initial_sync=True (has_prelogin={has_prelogin_data}, spreadsheet_existed={session.get('spreadsheet_existed')})")
+    else:
+        # Returning user with no pre-login data - sync silently in background
+        session["needs_initial_sync"] = False
+        print(f"[AUTH CALLBACK] Setting needs_initial_sync=False (returning user, no pre-login data)")
 
     return redirect("/")
 
@@ -926,10 +947,13 @@ def check_sync_sources():
     # Check DEFAULT database for pre-login pomodoros (only if different from user DB)
     default_count = 0
     user_db_path = get_user_db_path()
+    print(f"[SYNC CHECK] user_db_path={user_db_path}, DEFAULT_DB_PATH={DEFAULT_DB_PATH}")
+    print(f"[SYNC CHECK] paths_different={user_db_path != DEFAULT_DB_PATH}, default_exists={DEFAULT_DB_PATH.exists()}")
     if user_db_path != DEFAULT_DB_PATH and DEFAULT_DB_PATH.exists():
         default_db = sqlite3.connect(DEFAULT_DB_PATH)
         default_count = default_db.execute("SELECT COUNT(*) FROM pomodoros").fetchone()[0]
         default_db.close()
+        print(f"[SYNC CHECK] default_count={default_count}")
 
     # Get Google Sheets count
     try:
@@ -939,6 +963,7 @@ def check_sync_sources():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+    print(f"[SYNC CHECK] RESULT: local={local_count}, default={default_count}, sheets={sheets_count}, needs_sync={session.get('needs_initial_sync', False)}")
     return jsonify({
         "local_count": local_count,
         "default_db_count": default_count,
