@@ -324,6 +324,12 @@ def get_google_flow():
     """Create Google OAuth flow."""
     if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
         return None
+    # Build redirect URI from X-Forwarded headers or fall back to request host
+    # Take first value if multiple proxies added headers (comma-separated)
+    proto = request.headers.get("X-Forwarded-Proto", request.scheme).split(",")[0].strip()
+    host = request.headers.get("X-Forwarded-Host", request.host).split(",")[0].strip()
+    redirect_uri = f"{proto}://{host}/auth/callback"
+
     return Flow.from_client_config(
         {
             "web": {
@@ -334,7 +340,7 @@ def get_google_flow():
             }
         },
         scopes=SCOPES,
-        redirect_uri=url_for("auth_callback", _external=True),
+        redirect_uri=redirect_uri,
     )
 
 
