@@ -2981,17 +2981,43 @@
                 const actionsEl = document.getElementById('sync-modal-actions');
 
                 const localCount = data.local_count || 0;
+                const defaultDbCount = data.default_db_count || 0;  // Pre-login pomodoros
                 const sheetsCount = data.sheets_count || 0;
 
                 // Clear previous content
                 actionsEl.innerHTML = '';
 
-                if (localCount === 0 && sheetsCount === 0) {
+                // Priority: Handle pre-login pomodoros first (from default database)
+                if (defaultDbCount > 0) {
+                    // User has pre-login pomodoros - these take priority
+                    if (sheetsCount === 0) {
+                        // Only pre-login data exists, no sheets data
+                        titleEl.textContent = 'Upload Your Pomodoros?';
+                        descEl.textContent = 'You created pomodoros before logging in. Would you like to upload them to Google Sheets?';
+                        countsEl.innerHTML = `<span style="color: var(--accent);">Found ${defaultDbCount} pomodoro${defaultDbCount > 1 ? 's' : ''} created before login.</span>`;
+                        actionsEl.innerHTML = `
+                            <button class="secondary" onclick="performInitialSync('skip', 'skip')">No, Start Fresh</button>
+                            <button class="primary" onclick="performInitialSync('default_to_sheets', 'skip')">Yes, Upload</button>
+                        `;
+                    } else {
+                        // Pre-login data AND sheets data exist
+                        titleEl.textContent = 'Merge Your Data?';
+                        descEl.textContent = 'You have pomodoros from before login AND existing data in Google Sheets. Upload your pre-login pomodoros to merge them?';
+                        countsEl.innerHTML = `
+                            <span style="color: var(--accent);">${defaultDbCount} pomodoro${defaultDbCount > 1 ? 's' : ''} from before login</span><br>
+                            <span style="color: var(--success);">${sheetsCount} pomodoro${sheetsCount > 1 ? 's' : ''} already in Google Sheets</span>
+                        `;
+                        actionsEl.innerHTML = `
+                            <button class="secondary" onclick="performInitialSync('sheets_to_local', 'sheets_to_local')">Skip, Use Google Sheets Only</button>
+                            <button class="primary" onclick="performInitialSync('default_to_sheets', 'skip')">Upload Pre-login Data</button>
+                        `;
+                    }
+                } else if (localCount === 0 && sheetsCount === 0) {
                     // Neither has data - just complete sync silently
                     await performInitialSync('skip', 'skip');
                     return;
                 } else if (localCount > 0 && sheetsCount === 0) {
-                    // Only local has data - offer to push to sheets
+                    // Only local (user-specific) has data - offer to push to sheets
                     titleEl.textContent = 'Upload Local Data?';
                     descEl.textContent = 'You have pomodoros on this device. Would you like to upload them to Google Sheets?';
                     countsEl.innerHTML = `<span style="color: var(--accent);">Found ${localCount} pomodoro${localCount > 1 ? 's' : ''} locally.</span>`;
@@ -3034,6 +3060,7 @@
             actionsEl.innerHTML = '';
 
             try {
+                // Step 1: Perform the requested migration
                 const res = await fetch('/api/migrate', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -3044,28 +3071,41 @@
                 });
                 const data = await res.json();
 
-                if (data.success) {
-                    modal.classList.remove('active');
-                    // Reload all data views
-                    loadWeeklyOverview();  // Refresh Timer tab
-                    loadHistory();
-                    loadSettings();
-
-                    // Show status message
-                    const statusEl = document.getElementById('migrate-status');
-                    if (statusEl) {
-                        statusEl.style.display = 'block';
-                        statusEl.style.color = 'var(--success)';
-                        if (data.pomodoros_migrated > 0) {
-                            statusEl.textContent = `✓ Synced ${data.pomodoros_migrated} pomodoros`;
-                        } else {
-                            statusEl.textContent = '✓ Sync complete';
-                        }
-                    }
-                } else {
+                if (!data.success) {
                     descEl.textContent = 'Sync failed: ' + (data.error || 'Unknown error');
                     descEl.style.color = 'var(--accent)';
                     actionsEl.innerHTML = `<button class="primary" onclick="document.getElementById('initial-sync-modal').classList.remove('active')">Close</button>`;
+                    return;
+                }
+
+                let totalMigrated = data.pomodoros_migrated || 0;
+
+                // Step 2: If we uploaded pre-login data, also pull from sheets to local cache
+                if (pomodorosDirection === 'default_to_sheets') {
+                    descEl.textContent = 'Downloading to local cache...';
+                    const syncRes = await fetch('/api/sync/now', { method: 'POST' });
+                    const syncData = await syncRes.json();
+                    if (syncData.synced_from_sheets) {
+                        totalMigrated = syncData.synced_from_sheets;
+                    }
+                }
+
+                modal.classList.remove('active');
+                // Reload all data views
+                loadWeeklyOverview();  // Refresh Timer tab
+                loadHistory();
+                loadSettings();
+
+                // Show status message
+                const statusEl = document.getElementById('migrate-status');
+                if (statusEl) {
+                    statusEl.style.display = 'block';
+                    statusEl.style.color = 'var(--success)';
+                    if (totalMigrated > 0) {
+                        statusEl.textContent = `✓ Synced ${totalMigrated} pomodoros`;
+                    } else {
+                        statusEl.textContent = '✓ Sync complete';
+                    }
                 }
             } catch (e) {
                 descEl.textContent = 'Sync failed: ' + e.message;
