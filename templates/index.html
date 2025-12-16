@@ -515,6 +515,14 @@
                     <p style="color: var(--success); font-size: 0.875rem; margin-bottom: 1rem;">
                         ✓ Data synced to Google Sheets
                     </p>
+                    <div style="margin-bottom: 1rem;">
+                        <label for="spreadsheet-id" style="font-size: 0.875rem; color: var(--text-secondary); display: block; margin-bottom: 0.25rem;">Spreadsheet ID:</label>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <input type="text" id="spreadsheet-id" style="flex: 1; font-family: monospace; font-size: 0.75rem; padding: 0.5rem;" placeholder="Spreadsheet ID">
+                            <button class="secondary" onclick="updateSpreadsheetId()" style="white-space: nowrap;">Update</button>
+                        </div>
+                        <p id="spreadsheet-id-status" style="font-size: 0.75rem; margin-top: 0.25rem; display: none;"></p>
+                    </div>
                     <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
                         <button class="secondary" onclick="refreshFromSheets()">Refresh Data</button>
                         <button class="secondary" onclick="migrateData()">Migrate Local Data</button>
@@ -3089,6 +3097,7 @@
                 loggedIn.style.display = 'block';
                 document.getElementById('google-name').textContent = authStatus.name || '';
                 document.getElementById('google-email').textContent = authStatus.email || '';
+                document.getElementById('spreadsheet-id').value = authStatus.spreadsheet_id || '';
                 if (authStatus.picture) {
                     document.getElementById('google-avatar').src = authStatus.picture;
                 }
@@ -3100,6 +3109,47 @@
                     loginBtn.style.opacity = '0.5';
                     notConfigured.style.display = 'block';
                 }
+            }
+        }
+
+        async function updateSpreadsheetId() {
+            const newId = document.getElementById('spreadsheet-id').value.trim();
+            const statusEl = document.getElementById('spreadsheet-id-status');
+
+            if (!newId) {
+                statusEl.style.display = 'block';
+                statusEl.style.color = 'var(--accent)';
+                statusEl.textContent = 'Please enter a spreadsheet ID';
+                return;
+            }
+
+            statusEl.style.display = 'block';
+            statusEl.style.color = 'var(--text-secondary)';
+            statusEl.textContent = 'Updating...';
+
+            try {
+                const res = await fetch('/api/auth/spreadsheet', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ spreadsheet_id: newId })
+                });
+                const data = await res.json();
+
+                if (data.error) {
+                    statusEl.style.color = 'var(--accent)';
+                    statusEl.textContent = 'Error: ' + data.error;
+                } else {
+                    statusEl.style.color = 'var(--success)';
+                    statusEl.textContent = '✓ Spreadsheet ID updated';
+                    authStatus.spreadsheet_id = newId;
+                    // Refresh data from new spreadsheet
+                    setTimeout(() => {
+                        statusEl.style.display = 'none';
+                    }, 3000);
+                }
+            } catch (e) {
+                statusEl.style.color = 'var(--accent)';
+                statusEl.textContent = 'Error: ' + e.message;
             }
         }
 
