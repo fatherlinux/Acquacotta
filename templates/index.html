@@ -2971,13 +2971,21 @@
             authStatus = await res.json();
             updateAuthUI();
 
-            // If logged in and needs initial sync, show sync options modal
-            if (authStatus.logged_in && authStatus.needs_initial_sync) {
-                await showInitialSyncModal();
+            if (authStatus.logged_in) {
+                // If needs initial sync, show sync options modal (for shared cache migration, etc.)
+                if (authStatus.needs_initial_sync) {
+                    await showInitialSyncModal();
+                }
+                // Always refresh from Google Sheets after any modal handling
+                try {
+                    await fetch('/api/sync/now', { method: 'POST' });
+                } catch (e) {
+                    console.error('Failed to sync from Google Sheets:', e);
+                }
             }
 
             // Always load settings (works with SQLite locally or Google Sheets when logged in)
-            loadSettings();
+            await loadSettings();
         }
 
         async function showInitialSyncModal() {
@@ -3027,11 +3035,9 @@
                         <button class="primary" onclick="performInitialSync('local_to_sheets', 'local_to_sheets')">Yes, Upload</button>
                     `;
                 } else if (localCount === 0 && sheetsCount > 0) {
-                    // Only sheets has data - pull from sheets
-                    titleEl.textContent = 'Download Your Data';
-                    descEl.textContent = 'Found your existing data in Google Sheets. Downloading to this device...';
-                    countsEl.innerHTML = `<span style="color: var(--success);">Found ${sheetsCount} pomodoro${sheetsCount > 1 ? 's' : ''} in Google Sheets.</span>`;
-                    actionsEl.innerHTML = `<button class="primary" onclick="performInitialSync('sheets_to_local', 'sheets_to_local')">Download</button>`;
+                    // Only sheets has data - auto-download silently
+                    await performInitialSync('sheets_to_local', 'sheets_to_local');
+                    return;
                 } else {
                     // Both have data - ask user to choose
                     titleEl.textContent = 'Data Found in Both Places';
@@ -3074,9 +3080,9 @@
                 if (data.success) {
                     modal.classList.remove('active');
                     // Reload all data views
-                    loadWeeklyOverview();  // Refresh Timer tab
-                    loadHistory();
-                    loadSettings();
+                    await loadWeeklyOverview();  // Refresh Timer tab
+                    await loadHistory();
+                    await loadSettings();
 
                     // Show status message
                     const statusEl = document.getElementById('migrate-status');
@@ -3255,8 +3261,11 @@
         // Init
         populateTimezoneDropdown();
         startClock();
-        checkAuthStatus();
-        loadWeeklyOverview();
+        (async () => {
+            await checkAuthStatus();
+            await loadWeeklyOverview();
+            await loadHistory();
+        })();
     </script>
 </body>
 </html>
