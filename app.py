@@ -1027,9 +1027,20 @@ def check_sync_sources():
     if not use_google_sheets():
         return jsonify({"error": "Not logged in to Google"}), 401
 
-    # Get local count
+    # Get user's local count (per-user database)
     db = get_db()
     local_count = db.execute("SELECT COUNT(*) FROM pomodoros").fetchone()[0]
+
+    # Check shared cache (DEFAULT_DB_PATH) for pomodoros from before login
+    shared_cache_count = 0
+    if DEFAULT_DB_PATH.exists() and get_user_db_path() != DEFAULT_DB_PATH:
+        try:
+            shared_db = sqlite3.connect(DEFAULT_DB_PATH)
+            shared_db.row_factory = sqlite3.Row
+            shared_cache_count = shared_db.execute("SELECT COUNT(*) FROM pomodoros").fetchone()[0]
+            shared_db.close()
+        except Exception:
+            pass  # Shared cache doesn't exist or is empty
 
     # Get Google Sheets count
     try:
@@ -1041,6 +1052,7 @@ def check_sync_sources():
 
     return jsonify({
         "local_count": local_count,
+        "shared_cache_count": shared_cache_count,
         "sheets_count": sheets_count,
         "needs_initial_sync": session.get("needs_initial_sync", False),
     })
@@ -1071,7 +1083,7 @@ def migrate_data():
     """Migrate data between SQLite and Google Sheets.
 
     Request body:
-        pomodoros_direction: "local_to_sheets" | "sheets_to_local" | "skip"
+        pomodoros_direction: "local_to_sheets" | "sheets_to_local" | "shared_cache_to_sheets" | "skip"
         settings_direction: "local_to_sheets" | "sheets_to_local" | "skip"
     """
     if not use_google_sheets():
@@ -1088,7 +1100,42 @@ def migrate_data():
     migrated_pomodoros = 0
     skipped_pomodoros = 0
 
-    if pomodoros_direction == "local_to_sheets":
+    if pomodoros_direction == "shared_cache_to_sheets":
+        # Push pomodoros from shared cache to Google Sheets
+        if DEFAULT_DB_PATH.exists() and get_user_db_path() != DEFAULT_DB_PATH:
+            shared_db = sqlite3.connect(DEFAULT_DB_PATH)
+            shared_db.row_factory = sqlite3.Row
+
+            existing_pomodoros = sheets_storage.get_pomodoros(service, spreadsheet_id)
+            existing_ids = {p["id"] for p in existing_pomodoros}
+
+            rows = shared_db.execute("SELECT * FROM pomodoros ORDER BY start_time").fetchall()
+            pomodoros_to_upload = []
+            for row in rows:
+                if row["id"] in existing_ids:
+                    skipped_pomodoros += 1
+                    continue
+                pomodoro = {
+                    "id": row["id"],
+                    "name": row["name"],
+                    "type": row["type"],
+                    "start_time": row["start_time"],
+                    "end_time": row["end_time"],
+                    "duration_minutes": row["duration_minutes"],
+                    "notes": row["notes"],
+                }
+                pomodoros_to_upload.append(pomodoro)
+
+            if pomodoros_to_upload:
+                sheets_storage.save_pomodoros_batch(service, spreadsheet_id, pomodoros_to_upload)
+                migrated_pomodoros = len(pomodoros_to_upload)
+
+            # Clear the shared cache after successful migration
+            shared_db.execute("DELETE FROM pomodoros")
+            shared_db.commit()
+            shared_db.close()
+
+    elif pomodoros_direction == "local_to_sheets":
         # Push local pomodoros to Google Sheets
         existing_pomodoros = sheets_storage.get_pomodoros(service, spreadsheet_id)
         existing_ids = {p["id"] for p in existing_pomodoros}
