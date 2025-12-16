@@ -406,6 +406,14 @@ def get_sheets_service():
     return build("sheets", "v4", credentials=credentials)
 
 
+def get_drive_service():
+    """Get Google Drive API service."""
+    credentials = get_credentials()
+    if not credentials:
+        return None
+    return build("drive", "v3", credentials=credentials)
+
+
 def use_google_sheets():
     """Check if we should use Google Sheets storage."""
     return "credentials" in session and "spreadsheet_id" in session
@@ -491,22 +499,44 @@ def auth_callback():
                 stored_spreadsheet_id = None
 
         if not stored_spreadsheet_id:
-            # Create new spreadsheet (drive.file scope only allows access to files we create)
-            sheets_service = get_sheets_service()
-            spreadsheet = sheets_service.spreadsheets().create(
-                body={
-                    "properties": {"title": "Acquacotta - Pomodoro Tracker"},
-                    "sheets": [
-                        {"properties": {"title": "Pomodoros"}},
-                        {"properties": {"title": "Settings"}},
-                    ],
-                }
+            # Create new spreadsheet using Drive API (required for drive.file scope)
+            drive_service = get_drive_service()
+            file_metadata = {
+                "name": "Acquacotta - Pomodoro Tracker",
+                "mimeType": "application/vnd.google-apps.spreadsheet",
+            }
+            spreadsheet = drive_service.files().create(
+                body=file_metadata,
+                fields="id",
             ).execute()
-            session["spreadsheet_id"] = spreadsheet["spreadsheetId"]
+            session["spreadsheet_id"] = spreadsheet["id"]
             session["spreadsheet_existed"] = False
 
             # Save the mapping for future logins
             save_spreadsheet_id(user_email, session["spreadsheet_id"])
+
+            # Now use Sheets API to set up the sheets (we have access since we created the file)
+            sheets_service = get_sheets_service()
+
+            # Rename default Sheet1 to Pomodoros and add Settings sheet
+            sheets_service.spreadsheets().batchUpdate(
+                spreadsheetId=session["spreadsheet_id"],
+                body={
+                    "requests": [
+                        {
+                            "updateSheetProperties": {
+                                "properties": {"sheetId": 0, "title": "Pomodoros"},
+                                "fields": "title",
+                            }
+                        },
+                        {
+                            "addSheet": {
+                                "properties": {"title": "Settings"}
+                            }
+                        },
+                    ]
+                },
+            ).execute()
 
             # Add headers to Pomodoros sheet
             sheets_service.spreadsheets().values().update(
@@ -536,7 +566,16 @@ def auth_callback():
 
 @app.route("/auth/logout")
 def auth_logout():
-    """Log out and clear session."""
+    """Log out and clear session, including user's local cache."""
+    # Delete user's local database to prevent stale data on next login
+    if "user_email" in session:
+        user_db_path = get_user_db_path()
+        if user_db_path != DEFAULT_DB_PATH and user_db_path.exists():
+            # Close any open connection first
+            if "db" in g:
+                g.db.close()
+                g.pop("db", None)
+            user_db_path.unlink()
     session.clear()
     return redirect("/")
 
@@ -557,6 +596,39 @@ def auth_status():
         "logged_in": False,
         "google_configured": bool(GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET),
     })
+
+
+@app.route("/api/auth/spreadsheet", methods=["POST"])
+def update_spreadsheet():
+    """Update the spreadsheet ID for the current user."""
+    if "user_email" not in session:
+        return jsonify({"error": "Not logged in"}), 401
+
+    data = request.get_json()
+    new_spreadsheet_id = data.get("spreadsheet_id", "").strip()
+
+    if not new_spreadsheet_id:
+        return jsonify({"error": "Spreadsheet ID is required"}), 400
+
+    # Validate that we can access this spreadsheet
+    try:
+        sheets_service = get_sheets_service()
+        sheets_service.spreadsheets().get(spreadsheetId=new_spreadsheet_id).execute()
+    except Exception as e:
+        error_msg = str(e)
+        if "404" in error_msg or "not found" in error_msg.lower():
+            return jsonify({
+                "error": "Cannot access this spreadsheet. With drive.file scope, you can only access spreadsheets created by this app instance."
+            }), 400
+        return jsonify({"error": f"Cannot access spreadsheet: {error_msg}"}), 400
+
+    # Update session
+    session["spreadsheet_id"] = new_spreadsheet_id
+
+    # Update the persistent mapping
+    save_spreadsheet_id(session["user_email"], new_spreadsheet_id)
+
+    return jsonify({"status": "ok", "spreadsheet_id": new_spreadsheet_id})
 
 
 @app.route("/api/pomodoros", methods=["GET"])
