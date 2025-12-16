@@ -2993,12 +2993,27 @@
                 const actionsEl = document.getElementById('sync-modal-actions');
 
                 const localCount = data.local_count || 0;
+                const sharedCacheCount = data.shared_cache_count || 0;
                 const sheetsCount = data.sheets_count || 0;
 
                 // Clear previous content
                 actionsEl.innerHTML = '';
 
-                if (localCount === 0 && sheetsCount === 0) {
+                // Priority: shared cache (data from before login) > local > sheets
+                if (sharedCacheCount > 0) {
+                    // Found data in shared cache from before login
+                    titleEl.textContent = 'Upload Your Local Work?';
+                    descEl.textContent = 'You have pomodoros from before you logged in. Would you like to upload them to Google Sheets?';
+                    let countsHtml = `<span style="color: var(--accent);">Found ${sharedCacheCount} pomodoro${sharedCacheCount > 1 ? 's' : ''} from local session.</span>`;
+                    if (sheetsCount > 0) {
+                        countsHtml += `<br><span style="color: var(--success);">Also found ${sheetsCount} pomodoro${sheetsCount > 1 ? 's' : ''} in Google Sheets.</span>`;
+                    }
+                    countsEl.innerHTML = countsHtml;
+                    actionsEl.innerHTML = `
+                        <button class="secondary" onclick="performInitialSync('skip', 'skip')">No, Discard Local</button>
+                        <button class="primary" onclick="performInitialSync('shared_cache_to_sheets', 'skip')">Yes, Upload to Sheets</button>
+                    `;
+                } else if (localCount === 0 && sheetsCount === 0) {
                     // Neither has data - just complete sync silently
                     await performInitialSync('skip', 'skip');
                     return;
