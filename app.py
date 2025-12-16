@@ -9,6 +9,9 @@ import uuid
 from datetime import datetime, timedelta
 from pathlib import Path
 
+# Allow OAuth scope changes (users may have previously granted different scopes)
+os.environ["OAUTHLIB_RELAX_TOKEN_SCOPE"] = "1"
+
 from flask import Flask, g, jsonify, redirect, render_template, request, session, url_for
 from flask_session import Session
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -32,11 +35,21 @@ app.config["SESSION_TYPE"] = "filesystem"
 app.config["SESSION_FILE_DIR"] = "/tmp/flask_session"
 Session(app)
 
+
+@app.errorhandler(Exception)
+def handle_exception(e):
+    """Return JSON for API errors instead of HTML."""
+    if request.path.startswith("/api/"):
+        return jsonify({"error": str(e)}), 500
+    # For non-API routes, re-raise to get default handling
+    raise e
+
+
 # Google OAuth configuration
 GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID")
 GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET")
 SCOPES = [
-    "https://www.googleapis.com/auth/spreadsheets",
+    "https://www.googleapis.com/auth/drive.file",
     "https://www.googleapis.com/auth/userinfo.email",
     "https://www.googleapis.com/auth/userinfo.profile",
     "openid",
@@ -62,6 +75,33 @@ DEFAULT_POMODORO_TYPES = [
     "Travel",
     "Unqueued",
 ]
+
+
+def get_user_spreadsheet_mapping_path():
+    """Get path to the user-to-spreadsheet mapping file."""
+    return DATA_DIR / "user_spreadsheets.json"
+
+
+def get_stored_spreadsheet_id(email):
+    """Get stored spreadsheet_id for a user email."""
+    mapping_path = get_user_spreadsheet_mapping_path()
+    if mapping_path.exists():
+        with open(mapping_path, "r") as f:
+            mapping = json.load(f)
+            return mapping.get(email)
+    return None
+
+
+def save_spreadsheet_id(email, spreadsheet_id):
+    """Save spreadsheet_id for a user email."""
+    mapping_path = get_user_spreadsheet_mapping_path()
+    mapping = {}
+    if mapping_path.exists():
+        with open(mapping_path, "r") as f:
+            mapping = json.load(f)
+    mapping[email] = spreadsheet_id
+    with open(mapping_path, "w") as f:
+        json.dump(mapping, f)
 
 
 def get_user_db_path():
@@ -366,34 +406,6 @@ def get_sheets_service():
     return build("sheets", "v4", credentials=credentials)
 
 
-def get_drive_service():
-    """Get Google Drive API service."""
-    credentials = get_credentials()
-    if not credentials:
-        return None
-    return build("drive", "v3", credentials=credentials)
-
-
-def find_existing_spreadsheet():
-    """Find existing Acquacotta spreadsheet in user's Drive."""
-    drive_service = get_drive_service()
-    if not drive_service:
-        return None
-
-    # Search for spreadsheet by name
-    results = drive_service.files().list(
-        q="name='Acquacotta - Pomodoro Tracker' and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false",
-        spaces="drive",
-        fields="files(id, name)",
-        pageSize=1,
-    ).execute()
-
-    files = results.get("files", [])
-    if files:
-        return files[0]["id"]
-    return None
-
-
 def use_google_sheets():
     """Check if we should use Google Sheets storage."""
     return "credentials" in session and "spreadsheet_id" in session
@@ -420,54 +432,66 @@ def terms():
 @app.route("/auth/google")
 def auth_google():
     """Initiate Google OAuth flow."""
-    flow = get_google_flow()
-    if not flow:
-        return jsonify({"error": "Google OAuth not configured"}), 500
-    authorization_url, state = flow.authorization_url(
-        access_type="offline",
-        include_granted_scopes="true",
-        prompt="consent",
-    )
-    session["oauth_state"] = state
-    return redirect(authorization_url)
+    try:
+        flow = get_google_flow()
+        if not flow:
+            return jsonify({"error": "Google OAuth not configured"}), 500
+        authorization_url, state = flow.authorization_url(
+            access_type="offline",
+            include_granted_scopes="true",
+            prompt="consent",
+        )
+        session["oauth_state"] = state
+        return redirect(authorization_url)
+    except Exception as e:
+        import traceback
+        return f"<pre>Error: {e}\n\n{traceback.format_exc()}</pre>", 500
 
 
 @app.route("/auth/callback")
 def auth_callback():
     """Handle Google OAuth callback."""
-    flow = get_google_flow()
-    if not flow:
-        return jsonify({"error": "Google OAuth not configured"}), 500
+    try:
+        flow = get_google_flow()
+        if not flow:
+            return jsonify({"error": "Google OAuth not configured"}), 500
 
-    flow.fetch_token(authorization_response=request.url)
-    credentials = flow.credentials
+        flow.fetch_token(authorization_response=request.url)
+        credentials = flow.credentials
 
-    # Store credentials in session
-    session["credentials"] = {
-        "token": credentials.token,
-        "refresh_token": credentials.refresh_token,
-        "token_uri": credentials.token_uri,
-        "client_id": credentials.client_id,
-        "client_secret": credentials.client_secret,
-        "scopes": list(credentials.scopes),
-    }
+        # Store credentials in session
+        session["credentials"] = {
+            "token": credentials.token,
+            "refresh_token": credentials.refresh_token,
+            "token_uri": credentials.token_uri,
+            "client_id": credentials.client_id,
+            "client_secret": credentials.client_secret,
+            "scopes": list(credentials.scopes),
+        }
 
-    # Get user info
-    oauth2_service = build("oauth2", "v2", credentials=credentials)
-    user_info = oauth2_service.userinfo().get().execute()
-    session["user_email"] = user_info.get("email")
-    session["user_name"] = user_info.get("name")
-    session["user_picture"] = user_info.get("picture")
+        # Get user info
+        oauth2_service = build("oauth2", "v2", credentials=credentials)
+        user_info = oauth2_service.userinfo().get().execute()
+        user_email = user_info.get("email")
+        session["user_email"] = user_email
+        session["user_name"] = user_info.get("name")
+        session["user_picture"] = user_info.get("picture")
 
-    # Find existing spreadsheet or create new one
-    if "spreadsheet_id" not in session:
-        # First, check for existing spreadsheet
-        existing_id = find_existing_spreadsheet()
-        if existing_id:
-            session["spreadsheet_id"] = existing_id
-            session["spreadsheet_existed"] = True
-        else:
-            # Create new spreadsheet
+        # Check for existing spreadsheet_id (persisted by email)
+        stored_spreadsheet_id = get_stored_spreadsheet_id(user_email)
+        if stored_spreadsheet_id:
+            # Verify we can still access this spreadsheet (scope may have changed)
+            try:
+                sheets_service = get_sheets_service()
+                sheets_service.spreadsheets().get(spreadsheetId=stored_spreadsheet_id).execute()
+                session["spreadsheet_id"] = stored_spreadsheet_id
+                session["spreadsheet_existed"] = True
+            except Exception:
+                # Can't access old spreadsheet, need to create new one
+                stored_spreadsheet_id = None
+
+        if not stored_spreadsheet_id:
+            # Create new spreadsheet (drive.file scope only allows access to files we create)
             sheets_service = get_sheets_service()
             spreadsheet = sheets_service.spreadsheets().create(
                 body={
@@ -480,6 +504,9 @@ def auth_callback():
             ).execute()
             session["spreadsheet_id"] = spreadsheet["spreadsheetId"]
             session["spreadsheet_existed"] = False
+
+            # Save the mapping for future logins
+            save_spreadsheet_id(user_email, session["spreadsheet_id"])
 
             # Add headers to Pomodoros sheet
             sheets_service.spreadsheets().values().update(
@@ -497,11 +524,14 @@ def auth_callback():
                 body={"values": [["key", "value"]]},
             ).execute()
 
-    # Don't sync automatically - let user decide what to do with existing data
-    # The frontend will check needs_initial_sync and show migration dialog
-    session["needs_initial_sync"] = True
+        # Don't sync automatically - let user decide what to do with existing data
+        # The frontend will check needs_initial_sync and show migration dialog
+        session["needs_initial_sync"] = True
 
-    return redirect("/")
+        return redirect("/")
+    except Exception as e:
+        import traceback
+        return f"<pre>Error: {e}\n\n{traceback.format_exc()}</pre>", 500
 
 
 @app.route("/auth/logout")
@@ -992,6 +1022,8 @@ def migrate_data():
         existing_ids = {p["id"] for p in existing_pomodoros}
 
         rows = db.execute("SELECT * FROM pomodoros ORDER BY start_time").fetchall()
+        pomodoros_to_upload = []
+        ids_to_mark_synced = []
         for row in rows:
             if row["id"] in existing_ids:
                 skipped_pomodoros += 1
@@ -1005,10 +1037,16 @@ def migrate_data():
                 "duration_minutes": row["duration_minutes"],
                 "notes": row["notes"],
             }
-            sheets_storage.save_pomodoro(service, spreadsheet_id, pomodoro)
-            # Mark as synced in local db
-            db.execute("UPDATE pomodoros SET synced = 1 WHERE id = ?", (row["id"],))
-            migrated_pomodoros += 1
+            pomodoros_to_upload.append(pomodoro)
+            ids_to_mark_synced.append(row["id"])
+
+        # Upload all pomodoros in a single batch request to avoid rate limits
+        if pomodoros_to_upload:
+            sheets_storage.save_pomodoros_batch(service, spreadsheet_id, pomodoros_to_upload)
+            # Mark all as synced in local db
+            for pomodoro_id in ids_to_mark_synced:
+                db.execute("UPDATE pomodoros SET synced = 1 WHERE id = ?", (pomodoro_id,))
+            migrated_pomodoros = len(pomodoros_to_upload)
         db.commit()
 
     elif pomodoros_direction == "sheets_to_local":

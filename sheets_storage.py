@@ -60,6 +60,32 @@ def save_pomodoro(sheets_service, spreadsheet_id, pomodoro):
     ).execute()
 
 
+def save_pomodoros_batch(sheets_service, spreadsheet_id, pomodoros):
+    """Save multiple pomodoros to Google Sheets in a single request."""
+    if not pomodoros:
+        return
+
+    rows = []
+    for p in pomodoros:
+        rows.append([
+            p["id"],
+            p["name"],
+            p["type"],
+            p["start_time"],
+            p["end_time"],
+            p["duration_minutes"],
+            p.get("notes") or "",
+        ])
+
+    sheets_service.spreadsheets().values().append(
+        spreadsheetId=spreadsheet_id,
+        range="Pomodoros!A:G",
+        valueInputOption="RAW",
+        insertDataOption="INSERT_ROWS",
+        body={"values": rows},
+    ).execute()
+
+
 def update_pomodoro(sheets_service, spreadsheet_id, pomodoro_id, data):
     """Update a pomodoro in Google Sheets."""
     # Find the row with this ID
