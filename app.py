@@ -477,6 +477,21 @@ def auth_callback():
             "scopes": list(credentials.scopes),
         }
 
+        # Check if we have all required scopes (user may have authorized with old scopes)
+        required_scopes = {"https://www.googleapis.com/auth/drive.file"}
+        granted_scopes = set(credentials.scopes) if credentials.scopes else set()
+        if not required_scopes.issubset(granted_scopes):
+            # Missing required scopes - clear session and re-authorize
+            session.clear()
+            flow = get_google_flow()
+            authorization_url, state = flow.authorization_url(
+                access_type="offline",
+                include_granted_scopes="false",  # Request fresh scopes
+                prompt="consent",  # Force consent screen to get new scopes
+            )
+            session["state"] = state
+            return redirect(authorization_url)
+
         # Get user info
         oauth2_service = build("oauth2", "v2", credentials=credentials)
         user_info = oauth2_service.userinfo().get().execute()
