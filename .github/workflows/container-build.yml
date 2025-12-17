@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
 
 env:
   REGISTRY: quay.io
@@ -16,6 +17,9 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: List installed software
+        run: apt list --installed
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
