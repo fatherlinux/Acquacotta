@@ -57,6 +57,17 @@ The application MUST be deployable as a single container with no external depend
 - Bug fixes follow `fix/description` naming
 - All changes via pull request with review
 
+### Release & Versioning
+The application follows [Semantic Versioning](https://semver.org/) (semver):
+- **Major** (X.0.0): Breaking changes to user data format, API, or Google Sheets schema
+- **Minor** (x.Y.0): New features or significant enhancements (e.g., new UI capabilities)
+- **Patch** (x.y.Z): Bug fixes, performance improvements, or minor tweaks
+
+Version tags trigger container builds via GitHub Actions. After merging a PR:
+1. Determine version bump type based on changes
+2. Create and push git tag (e.g., `v1.14.0`)
+3. Verify container build succeeds
+
 ## Governance
 
 This constitution supersedes informal practices and ad-hoc decisions. Amendments require:
@@ -67,4 +78,4 @@ This constitution supersedes informal practices and ad-hoc decisions. Amendments
 
 All development decisions MUST align with these principles. When principles conflict, prioritize in order: Privacy, User Data Ownership, Simplicity, Timer Agnosticism, Offline-First, Container-Ready.
 
-**Version**: 1.1.1 | **Ratified**: 2025-12-27 | **Last Amended**: 2025-12-27
+**Version**: 1.2.0 | **Ratified**: 2025-12-27 | **Last Amended**: 2025-12-27
