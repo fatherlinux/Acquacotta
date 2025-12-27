@@ -25,12 +25,12 @@ Acquacotta is a Pomodoro time tracking web application built with Python/Flask b
 
 | Principle | Status | Notes |
 |-----------|--------|-------|
-| I. User Data Ownership | PASS | Data stored in user's Google Sheets, CSV export available |
-| II. Offline-First | PASS | SQLite cache serves all reads, sync is background operation |
+| I. Privacy by Design | PASS | No analytics, minimal OAuth scopes, no server-side user data storage |
+| II. User Data Ownership | PASS | Data stored in user's Google Sheets, CSV export available |
 | III. Simplicity & Focus | PASS | Only Pomodoro timer, categorization, and reporting features |
-| IV. Privacy by Design | PASS | No analytics, minimal OAuth scopes, no server-side user data storage |
-| V. Container-Ready | PASS | Single container, env var config, no required volumes |
-| VI. Timer Agnosticism | PASS | Manual entry is P1 feature, UI supports both internal and external timer workflows |
+| IV. Timer Agnosticism | PASS | Manual entry is P1 feature, UI supports both internal and external timer workflows |
+| V. Offline-First | PASS | SQLite cache serves all reads, sync is background operation |
+| VI. Container-Ready | PASS | Single container, env var config, no required volumes |
 
 ## Project Structure
 

@@ -2,23 +2,23 @@
 
 ## Core Principles
 
-### I. User Data Ownership
-Users own and control their data. All pomodoro records and settings are stored in the user's personal Google Sheets, accessible and editable outside the application. The application creates no proprietary data formats or vendor lock-in. Users can export their data to CSV at any time. Deleting the application leaves user data intact in their Google Drive.
+### I. Privacy by Design
+The application collects no analytics, telemetry, or usage data. Google OAuth is used solely for authentication and Sheets API access. No user data is stored on application servers - all data flows directly between user browser and Google APIs. Session data expires and is not persisted beyond the browser session. The application requests minimal OAuth scopes (`drive.file` for app-created files only).
 
-### II. Offline-First Architecture
-The application MUST function without network connectivity. Local SQLite serves as the primary data store for all read operations. Background sync propagates changes to Google Sheets without blocking user interactions. Sync failures MUST NOT disrupt the user experience - operations queue for retry. Local cache provides instant responsiveness regardless of network conditions.
+### II. User Data Ownership
+Users own and control their data. All pomodoro records and settings are stored in the user's personal Google Sheets, accessible and editable outside the application. The application creates no proprietary data formats or vendor lock-in. Users can export their data to CSV at any time. Deleting the application leaves user data intact in their Google Drive.
 
 ### III. Simplicity & Focus
 Acquacotta is a Pomodoro timer and time tracker - nothing more. Features MUST directly support: starting/stopping timers, categorizing completed work, and viewing time reports. Feature requests that deviate from core Pomodoro methodology require explicit justification. The UI MUST remain minimal and distraction-free. Avoid feature creep - say no to features that add complexity without proportional value.
 
-### IV. Privacy by Design
-The application collects no analytics, telemetry, or usage data. Google OAuth is used solely for authentication and Sheets API access. No user data is stored on application servers - all data flows directly between user browser and Google APIs. Session data expires and is not persisted beyond the browser session. The application requests minimal OAuth scopes (`drive.file` for app-created files only).
-
-### V. Container-Ready Deployment
-The application MUST be deployable as a single container with no external dependencies beyond Google APIs. All configuration via environment variables. No required persistent volumes for application state (user data lives in Google Sheets). Stateless design enables horizontal scaling. Support both rootless Podman and Docker deployments.
-
-### VI. Timer Agnosticism
+### IV. Timer Agnosticism
 Users MUST be able to use the built-in timer OR an external physical timer (e.g., a desk timer) with equal effectiveness. The application MUST NOT assume the internal timer is always used. Manual entry of pomodoros MUST be a first-class feature, not an afterthought. The UI MUST make it equally easy to: (a) start the internal timer and log on completion, or (b) log a completed pomodoro after using an external timer. Time tracking is the core value - the timer is optional tooling.
+
+### V. Offline-First Architecture
+The application MUST function without network connectivity. Local SQLite serves as the primary data store for all read operations. Background sync propagates changes to Google Sheets without blocking user interactions. Sync failures MUST NOT disrupt the user experience - operations queue for retry. Local cache provides instant responsiveness regardless of network conditions.
+
+### VI. Container-Ready Deployment
+The application MUST be deployable as a single container with no external dependencies beyond Google APIs. All configuration via environment variables. No required persistent volumes for application state (user data lives in Google Sheets). Stateless design enables horizontal scaling. Support both rootless Podman and Docker deployments.
 
 ## Technology Constraints
 
@@ -67,4 +67,4 @@ This constitution supersedes informal practices and ad-hoc decisions. Amendments
 
 All development decisions MUST align with these principles. When principles conflict, prioritize in order: Privacy, User Data Ownership, Simplicity, Timer Agnosticism, Offline-First, Container-Ready.
 
-**Version**: 1.1.0 | **Ratified**: 2025-12-27 | **Last Amended**: 2025-12-27
+**Version**: 1.1.1 | **Ratified**: 2025-12-27 | **Last Amended**: 2025-12-27
