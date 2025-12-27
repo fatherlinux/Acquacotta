@@ -52,8 +52,8 @@
             flex: 0 0 320px;
         }
         .timer-details {
-            margin-bottom: 1rem;
-            padding: 0.75rem;
+            margin-bottom: 0.5rem;
+            padding: 0.5rem;
             background: var(--bg-primary);
             border-radius: 8px;
         }
@@ -65,7 +65,7 @@
         nav {
             display: flex; gap: 0.5rem;
             background: var(--bg-secondary);
-            padding: 0.5rem; border-radius: 8px; margin-bottom: 1rem;
+            padding: 0.5rem; border-radius: 8px; margin-bottom: 0.5rem;
         }
         nav button {
             flex: 1; padding: 0.75rem; border: none; border-radius: 8px;
@@ -78,7 +78,7 @@
         .view.active { display: block; }
         .card {
             background: var(--bg-secondary);
-            border-radius: 8px; padding: 1.5rem; margin-bottom: 1rem;
+            border-radius: 8px; padding: 1rem; margin-bottom: 0.75rem;
         }
         button.primary {
             background: var(--accent); color: white; border: none;
@@ -102,8 +102,8 @@
         h3 { font-size: 1rem; color: var(--text-secondary); margin-bottom: 0.5rem; }
 
         /* Timer */
-        .timer-container { text-align: center; padding: 2rem; }
-        .timer-display { position: relative; width: 280px; height: 280px; margin: 0 auto 2rem; cursor: grab; touch-action: none; }
+        .timer-container { text-align: center; padding: 1rem; }
+        .timer-display { position: relative; width: 280px; height: 280px; margin: 0 auto 1rem; cursor: grab; touch-action: none; }
         .timer-ring {
             transform: rotate(-90deg);
             touch-action: none;
@@ -127,14 +127,37 @@
         .timer-status { color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.1em; }
         .timer-controls { display: flex; gap: 0.5rem; justify-content: center; flex-wrap: wrap; }
         .timer-controls button { width: 70px; height: 40px; padding: 0; text-align: center; font-size: 0.875rem; }
-        .duration-presets { display: flex; gap: 0.5rem; justify-content: center; margin-bottom: 1.5rem; }
+        .duration-presets { display: flex; gap: 0.5rem; justify-content: center; margin-bottom: 0.5rem; }
         .duration-presets button {
-            padding: 0.5rem 1rem; border: 2px solid var(--bg-tertiary); border-radius: 8px;
-            background: transparent; color: var(--text-secondary); cursor: pointer; font-size: 0.875rem;
+            min-width: 60px; height: 44px; padding: 0.5rem 0.75rem; border: 2px solid var(--bg-tertiary); border-radius: 8px;
+            background: transparent; color: var(--text-secondary); cursor: pointer; font-size: 0.875rem; font-weight: 500;
             transition: all 0.2s;
         }
         .duration-presets button:hover { border-color: var(--accent); color: var(--text-primary); }
         .duration-presets button.active { border-color: var(--accent); background: var(--accent); color: white; }
+
+        /* Break Info */
+        .break-info { text-align: center; color: var(--text-secondary); font-size: 0.75rem; margin-top: 0.5rem; margin-bottom: 0.75rem; }
+        .break-progress-bar {
+            display: flex; gap: 6px; justify-content: center; align-items: center; margin-bottom: 0.25rem;
+        }
+        .break-progress-bar .segment {
+            width: 24px; height: 8px; border-radius: 4px; background: var(--bg-tertiary);
+            transition: background 0.2s; cursor: pointer;
+        }
+        .break-progress-bar .segment:hover { background: var(--text-secondary); }
+        .break-progress-bar .segment.filled { background: var(--accent); }
+        .break-progress-bar .segment.current { background: var(--accent); }
+
+        /* Break Presets */
+        .break-presets { display: flex; gap: 0.5rem; justify-content: center; margin-bottom: 0.25rem; }
+        .break-presets button {
+            min-width: 60px; height: 44px; padding: 0.5rem 0.75rem; border: 2px solid var(--bg-tertiary); border-radius: 8px;
+            background: transparent; color: var(--text-secondary); cursor: pointer; font-size: 0.875rem; font-weight: 500;
+            transition: all 0.2s;
+        }
+        .break-presets button:hover { border-color: var(--success); color: var(--text-primary); }
+        .break-presets button.active { border-color: var(--success); background: var(--success); color: white; }
 
         /* Modal */
         .modal-overlay {
@@ -453,10 +476,20 @@
                         </div>
                     </div>
                     <div class="duration-presets" id="duration-presets">
-                        <button data-preset="1">5 min</button>
-                        <button data-preset="2">10 min</button>
-                        <button data-preset="3">15 min</button>
-                        <button data-preset="4" class="active">25 min</button>
+                        <button data-preset="1">5</button>
+                        <button data-preset="2">10</button>
+                        <button data-preset="3">15</button>
+                        <button data-preset="4" class="active">25</button>
+                    </div>
+                    <!-- Break Presets -->
+                    <div class="break-presets" id="break-presets">
+                        <button id="btn-short-break">5</button>
+                        <button id="btn-long-break">15</button>
+                    </div>
+                    <!-- Break Info -->
+                    <div class="break-info" id="break-info">
+                        <div class="break-progress-bar" id="break-progress-bar"></div>
+                        <div id="break-progress">1/4 until long break</div>
                     </div>
                     <!-- Pomodoro Details -->
                     <div class="timer-details">
@@ -1785,13 +1818,62 @@
             return pomodorosCompleted > 0 && pomodorosCompleted % settings.pomodoros_until_long_break === 0;
         }
 
-        function startBreak() {
+        function updateBreakInfo() {
+            const breakProgressEl = document.getElementById('break-progress');
+            const breakProgressBar = document.getElementById('break-progress-bar');
+            const breakInfoEl = document.getElementById('break-info');
+
+            // Hide everything if always using short breaks
+            if (settings.always_use_short_break) {
+                breakInfoEl.style.display = 'none';
+                return;
+            }
+
+            breakInfoEl.style.display = '';
+            const total = settings.pomodoros_until_long_break;
+            const currentPosition = pomodorosCompleted % total;
+
+            // Build clickable progress bar segments
+            let barHtml = '';
+            for (let i = 0; i < total; i++) {
+                const isCurrent = i === currentPosition;
+                const isFilled = i < currentPosition;
+                const className = isCurrent ? 'segment current' : (isFilled ? 'segment filled' : 'segment');
+                barHtml += `<div class="${className}" data-position="${i}"></div>`;
+            }
+            breakProgressBar.innerHTML = barHtml;
+
+            // Add click handlers to segments
+            breakProgressBar.querySelectorAll('.segment').forEach(seg => {
+                seg.addEventListener('click', () => {
+                    const position = parseInt(seg.dataset.position);
+                    // Set pomodorosCompleted to match this position in the cycle
+                    const cycleBase = Math.floor(pomodorosCompleted / total) * total;
+                    pomodorosCompleted = cycleBase + position;
+                    updateBreakInfo();
+                    updateBreakButtonStyles();
+                });
+            });
+
+            // Show text status - determined by position
+            const isLastPomodoro = currentPosition === total - 1;
+            if (isLastPomodoro) {
+                breakProgressEl.textContent = 'Long break next';
+            } else {
+                const remaining = total - currentPosition;
+                breakProgressEl.textContent = `${remaining} until long break`;
+            }
+        }
+
+        function startBreak(manualDuration = null) {
             timerState = 'running';
             isBreak = true;
-            const breakMinutes = getBreakDuration();
+            const breakMinutes = manualDuration || getBreakDuration();
+            const isLong = isLongBreak();
+            updateBreakButtonStyles();
             totalSeconds = breakMinutes * 60;
             remainingSeconds = totalSeconds;
-            document.getElementById('timer-status').textContent = isLongBreak() ? 'Long Break' : 'Break';
+            document.getElementById('timer-status').textContent = isLong ? 'Long Break' : 'Break';
             document.getElementById('timer-progress').classList.add('break');
             document.getElementById('timer-end-cap').classList.add('break');
             document.getElementById('btn-start').style.display = 'none';
@@ -1882,6 +1964,7 @@
 
             // Increment pomodoro count for long break logic
             pomodorosCompleted++;
+            updateBreakInfo();
 
             // Determine break type for notification
             const breakType = isLongBreak() ? 'long break' : 'break';
@@ -1934,6 +2017,7 @@
             document.getElementById('btn-stop').style.display = 'none';
             document.getElementById('btn-discard').style.display = 'none';
             updateTimerDisplay();
+            updateBreakInfo();
         }
 
         async function savePomodoro() {
@@ -1970,6 +2054,38 @@
             clearInterval(timerInterval);
             stopTickSound();
             resetTimer();
+        }
+
+        // Break preset buttons - set pomodoro position
+        document.getElementById('btn-short-break').addEventListener('click', () => {
+            const total = settings.pomodoros_until_long_break;
+            const cycleBase = Math.floor(pomodorosCompleted / total) * total;
+            pomodorosCompleted = cycleBase; // Set to first pomodoro (position 0)
+            updateBreakButtonStyles();
+            updateBreakInfo();
+        });
+        document.getElementById('btn-long-break').addEventListener('click', () => {
+            const total = settings.pomodoros_until_long_break;
+            const cycleBase = Math.floor(pomodorosCompleted / total) * total;
+            pomodorosCompleted = cycleBase + total - 1; // Set to last pomodoro
+            updateBreakButtonStyles();
+            updateBreakInfo();
+        });
+
+        function updateBreakButtonStyles() {
+            const shortBtn = document.getElementById('btn-short-break');
+            const longBtn = document.getElementById('btn-long-break');
+            const total = settings.pomodoros_until_long_break;
+            const currentPosition = pomodorosCompleted % total;
+            const isLastPomodoro = currentPosition === total - 1;
+
+            // Auto-select break button based on position
+            shortBtn.classList.toggle('active', !isLastPomodoro);
+            longBtn.classList.toggle('active', isLastPomodoro);
+
+            // Update button text with current break durations
+            shortBtn.textContent = settings.short_break_minutes;
+            longBtn.textContent = settings.long_break_minutes;
         }
 
         // Drag handlers for slidable timer
@@ -2089,7 +2205,7 @@
             document.querySelectorAll('#duration-presets button').forEach(btn => {
                 const preset = parseInt(btn.dataset.preset);
                 const minutes = settings[`timer_preset_${preset}`];
-                btn.textContent = `${minutes} min`;
+                btn.textContent = minutes;
                 if (preset === selectedPreset) {
                     btn.classList.add('active');
                 } else {
@@ -2940,6 +3056,10 @@
             // Populate type dropdowns and settings list
             populateTypeDropdowns();
             renderTypesList();
+
+            // Update break info display
+            updateBreakInfo();
+            updateBreakButtonStyles();
         }
 
         // Timer preset sliders
