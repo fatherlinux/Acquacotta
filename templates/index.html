@@ -125,8 +125,8 @@
         }
         .timer-time { font-size: 3.5rem; font-weight: 700; font-variant-numeric: tabular-nums; }
         .timer-status { color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.1em; }
-        .timer-controls { display: flex; gap: 1rem; justify-content: center; }
-        .timer-controls button { min-width: 100px; }
+        .timer-controls { display: flex; gap: 0.5rem; justify-content: center; flex-wrap: wrap; }
+        .timer-controls button { width: 70px; padding: 0.75rem 0; text-align: center; }
         .duration-presets { display: flex; gap: 0.5rem; justify-content: center; margin-bottom: 1.5rem; }
         .duration-presets button {
             padding: 0.5rem 1rem; border: 2px solid var(--bg-tertiary); border-radius: 8px;
@@ -471,6 +471,7 @@
                         <button id="btn-pause" class="secondary" style="display:none;">Pause</button>
                         <button id="btn-resume" class="primary" style="display:none;">Resume</button>
                         <button id="btn-stop" class="secondary" style="display:none;">Stop</button>
+                        <button id="btn-discard" class="secondary" style="display:none;">Discard</button>
                     </div>
                     <!-- Clock -->
                     <div id="clock-display" style="text-align: center; margin-top: 1rem; padding: 0.75rem; background: var(--bg-primary); border-radius: 8px;">
@@ -1752,6 +1753,7 @@
             document.getElementById('btn-start').style.display = 'none';
             document.getElementById('btn-pause').style.display = 'inline-block';
             document.getElementById('btn-stop').style.display = 'inline-block';
+            document.getElementById('btn-discard').style.display = 'inline-block';
 
             timerInterval = setInterval(() => {
                 if (remainingSeconds > 0) {
@@ -1795,6 +1797,7 @@
             document.getElementById('btn-start').style.display = 'none';
             document.getElementById('btn-pause').style.display = 'inline-block';
             document.getElementById('btn-stop').style.display = 'inline-block';
+            document.getElementById('btn-discard').style.display = 'none';
 
             timerInterval = setInterval(() => {
                 if (remainingSeconds > 0) {
@@ -1929,6 +1932,7 @@
             document.getElementById('btn-pause').style.display = 'none';
             document.getElementById('btn-resume').style.display = 'none';
             document.getElementById('btn-stop').style.display = 'none';
+            document.getElementById('btn-discard').style.display = 'none';
             updateTimerDisplay();
         }
 
@@ -1960,6 +1964,13 @@
         document.getElementById('btn-pause').addEventListener('click', pauseTimer);
         document.getElementById('btn-resume').addEventListener('click', resumeTimer);
         document.getElementById('btn-stop').addEventListener('click', stopTimer);
+        document.getElementById('btn-discard').addEventListener('click', discardTimer);
+
+        function discardTimer() {
+            clearInterval(timerInterval);
+            stopTickSound();
+            resetTimer();
+        }
 
         // Drag handlers for slidable timer
         function handleTimerDragStart(e) {
