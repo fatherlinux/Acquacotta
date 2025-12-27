@@ -1941,7 +1941,7 @@
                 body: JSON.stringify({
                     name,
                     type: document.getElementById('timer-pomo-type').value,
-                    duration_minutes: getSelectedDuration(),
+                    duration_minutes: Math.round(totalSeconds / 60),
                     notes: document.getElementById('timer-pomo-notes').value.trim() || null
                 })
             });
