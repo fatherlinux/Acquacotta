@@ -32,7 +32,7 @@
             color: var(--text-primary);
             min-height: 100vh;
         }
-        .container { max-width: 1200px; margin: 0 auto; padding: 1rem; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 0.5rem 1rem 1rem 1rem; }
         .timer-row {
             display: flex;
             gap: 1.5rem;
@@ -397,9 +397,18 @@
 </head>
 <body>
     <div class="container">
-        <header style="text-align: center; padding: 1rem 0;">
-            <h1 style="font-size: 1.5rem; color: var(--text-primary); margin: 0;">Acquacotta</h1>
-            <p style="font-size: 0.875rem; color: var(--text-secondary); margin: 0.25rem 0 0 0;">Pomodoro Tracker</p>
+        <header style="display: flex; justify-content: space-between; align-items: center; padding: 0.25rem 0; margin-bottom: 0.5rem;">
+            <div style="display: flex; align-items: center; gap: 0.75rem;">
+                <img src="/static/favicon.svg" alt="Acquacotta" style="width: 40px; height: 40px; display: block;">
+                <div>
+                    <div style="font-size: 1.25rem; font-weight: 600; color: var(--text-primary); line-height: 1; margin: 0;">Acquacotta</div>
+                    <div style="font-size: 0.75rem; color: var(--text-secondary); line-height: 1; margin: 0;">Pomodoro Tracker</div>
+                </div>
+            </div>
+            <div id="clock-display" style="text-align: right;">
+                <div id="clock-time" style="font-size: 1.25rem; font-weight: 400; font-variant-numeric: tabular-nums; color: var(--text-primary); line-height: 1; margin: 0;"></div>
+                <div id="clock-date" style="font-size: 0.75rem; color: var(--text-secondary); line-height: 1; margin: 0;"></div>
+            </div>
         </header>
         <nav>
             <button class="active" data-view="timer">Timer</button>
@@ -505,11 +514,6 @@
                         <button id="btn-resume" class="primary" style="display:none;">Resume</button>
                         <button id="btn-stop" class="secondary" style="display:none;">Stop</button>
                         <button id="btn-discard" class="secondary" style="display:none;">Discard</button>
-                    </div>
-                    <!-- Clock -->
-                    <div id="clock-display" style="text-align: center; margin-top: 1rem; padding: 0.75rem; background: var(--bg-primary); border-radius: 8px;">
-                        <div id="clock-time" style="font-size: 1.5rem; font-weight: 300; font-variant-numeric: tabular-nums; color: var(--text-primary);"></div>
-                        <div id="clock-date" style="font-size: 0.75rem; color: var(--text-secondary);"></div>
                     </div>
                 </div>
             </div>
