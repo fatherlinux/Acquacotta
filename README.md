@@ -1,83 +1,44 @@
 # Acquacotta
 
-**The Power-User's Pomodoro System.** A data-driven time tracker designed for those who want to turn their productivity history into actionable intelligence.
+## Why use Acquacotta?
 
-> *"Acquacotta automates your tracking by logging every session directly to your own Google Sheet. You own the infrastructure, you control the schema, and you can leverage the full power of spreadsheets and LLMs to analyze your performance."*
+Key Features
+- Implements all features of the standard pomodoro technique (25 minute focus, 5 minuute short break, 15 minute long break)
+- Provides 4 pre-set focus timers and 2 pre-set break timers (all configurable)
+- Integrated timer with sliadable face to provide the same functionality as a physical tomato timer on your desk
+- Seemlessly works weth an external pomodoro timer sitting on your desk
+- Free and open source [online service](https://acquacotta.crunchtools.com:8443) or use in a local container
 
-**Try it super easily with the free, hosted version here: https://acquacotta.crunchtools.com:8443** You can still save your data to your own Google Sheet.
+Advanced Time Management:
+- Weekly dashboard which helps you proactively tune how much you work and on which focus areas
+- Set visual daily minutes goal to make sure you're getting enough pomodoros done each day, but not too many
+- Custom Pomodoro types to ensure you're working on what you want to (Code, Customers, PTO, etc)
+- Daily, Weekly, and Monthly graphical/visual reports to help you better focus your time
+- Auto-start the next Pomodoro to avoid interruptions when in the flow state
 
-## Why Acquacotta?
-
-Most free, online tools are just simple 25-minute Pomodoro timers, and nothing more. Acquacotta is built for users who want to focus, but also track their performance over time, and make improvements over time.
-
-- **Google Sheets as a Platform**: Don't just "export" data; live in it. Use Sheets' native formulas, pivot tables, and AI features to build custom dashboards that no other app provides.
-
-- **Frictionless Automation**: Logs the category and duration automatically. Stop wasting time managing with a manual spreadsheet.
-
-- **Extreme Configurability**: Fine-tune Acquacotta to match your exact workflow. From custom focus categories to adjustable timer increments and sound profiles, the app adapts to you, not the other way around.
-
-- **Deep Performance Metrics**: Go beyond the clock. Track Focus Types to identify where your mental energy is actually going and where you are leaking time.
-
-- **Fluidly Use Physical Timer or Built-in Timer**: Whether you use the built-in digital timer or a high-end physical desk timer, Acquacotta provides a unified interface to capture every minute of work.
+Technical Features:
+- Real, recorded ticking sound provides focus stimulation (Pavlov's Dogs)
+- Uses an internal SQLite database by default
+- Designed to run in a Podman/Docker container or use the free online service
+- Seemlessly work between online and container using data and setting optionally saved in a private Google Sheet
+- Responsive authors - feel free to file any and all issues [hee](https://github.com/fatherlinux/Acquacotta/issues)
 
 ## The Story Behind the Soup
 
-Acquacotta was created by a veteran of the Pomodoro Technique with over 20 years of experience—ranging from engineering at NASA to leadership as a Senior Principal Product Manager at Red Hat.
-
-For two decades, that tracking was a manual, tedious process in spreadsheets because no app offered the right balance of automation and data flexibility. Acquacotta was born to solve that: a professional-grade tool for people who want to treat their productivity like a data science project, not just a series of alarms.
+Acquacotta was created as fun project by a veteran of the Pomodoro Technique with over 20+ years of using this system from doing HPC work at NASA to Product Management for Podman, Red Hat Universal Base Image, and Red Hat Enterprise Linux 10 [LinkedIn](https://www.linkedin.com/in/fatherlinux/details/experience/). It could be said that Acquacotta was rigorously vibe coded (I know, it sounds like an oxymoron) using spec-kit, and a strict process for adding Features. The [constitution](https://github.com/fatherlinux/Acquacotta/blob/main/.specify/memory/constitution.md) and [feature specifications](https://github.com/fatherlinux/Acquacotta/blob/main/.specify/specs/000-baseline/spec.md) are transparently committed in the [Acquacotta Git repository](https://github.com/fatherlinux/Acquacotta). For 20+ years I have meticulously tracked my pomodoros, always analyzing the last four weeks. I have refined the Pomodoro technique into set of practices that not only give me focus, but also give me a sense of satisfaction and freedom. 
 
 **Why the name?**
 
-Acquacotta means "cooked water" in Italian—a traditional, hearty tomato soup. Since the Pomodoro Technique is named after the tomato-shaped kitchen timer (tomato is *Pomodoro* in Italian), we felt a "complete meal" of a system—timer, automated logging, and powerful reporting—deserved a name that felt just as substantial.
+Acquacotta means "cooked water" in Italian—a traditional, hearty tomato soup. Since the Pomodoro technique is named after the tomato-shaped kitchen timer (tomato is *Pomodoro* in Italian), we felt a "complete meal" of a system—timer, automated logging, and powerful reporting—deserved a name that felt just as substantial.
 
-## Data-Driven Performance
-
-The classic Pomodoro method (Focus → Short Break → Repeat) is great for focus, but it's the review process that drives growth. Acquacotta puts you in the driver's seat:
-
-- **Audit Your Focus**: Are you spending enough time on deep learning vs. shallow administrative tasks?
-- **Balance Your Load**: Are meetings drowning out your "High-Value" work?
-- **Align with Goals**: See a weekly or monthly breakdown of your actual output compared to your intent.
-
-By categorizing each interval (e.g., Product, Learning, Administrative, Meetings), you turn a simple timer into a high-fidelity performance log.
-
-## Sustainable Productivity: Finding the "Goldilocks" Zone
-
-True productivity isn't just about doing more; it's about doing the right amount consistently. Acquacotta features visual Daily Minutes Goals to help you maintain a sustainable pace:
-
-- **Not Too Little**: Set a target for your "deep work" minutes to ensure you feel a sense of accomplishment and momentum every single day.
-- **Not Too Much**: Prevent the "heroics-to-burnout" cycle. Glancing at the reports give you visual sense of when you're working above your optimal daily capacity.
-- **Real-Time Visual Feedback**: Progress bars provide an instant, at-a-glance status of your day, helping you decide whether to take on one more task or call it a day.
-
-## The Sound of Deep Work
-
-One of Acquacotta's most praised features is its optional Acoustic Focus Mode.
-
-Inspired by the iconic, rhythmic ticking of a classic mechanical stopwatch or the "60 Minutes" stopwatch, our "tick-tock" audio is made to provide a subtle, grounding presence. For many users, this auditory feedback creates a stimulus that:
-
-- **Signals Flow State**: Over time, the sound becomes a Pavlovian trigger (think Pavlov's Dogs)—when the ticking starts, your brain knows it is time for deep work.
-- **Eliminates Time Blindness**: The gentle rhythm provides a subconscious sense of passing time without the anxiety of a countdown clock.
-- **Anchors Concentration**: The steady beat acts as a metronome for the mind, helping to block out erratic ambient noise and mental wandering.
-
-## Features
-
-- **Flexible Timer**: Configurable durations (5, 10, 15, 25 minutes) to match your workflow.
-- **Daily Goal Tracking**: Set and monitor visual minute targets to balance output and recovery.
-- **Physical Timer Support**: A dedicated mode to log completed pomodoros from tactile hardware instantly.
-- **Focus Audio**: Optional "60 Minutes" style ticking sound to maintain a high-tempo focus environment.
-- **Integrated Visuals**: Instant daily, weekly, and monthly performance charts built into the app.
-- **Offline-First Architecture**: A local SQLite cache ensures the UI is lightning-fast, even when your connection isn't.
-- **Native Sheets Backend**: Direct, real-time logging to your personal Google Cloud.
-- **Power-User Export**: Full CSV portability for external analysis.
-
-## Who Is This For?
-
-Acquacotta is built for **Engineers**, **Managers**, **Freelancers**, and **Data Nerds** who want to:
-
-- Quantify their work habits with professional-grade accuracy.
-- Automate the "admin of productivity."
-- Maintain a permanent, accessible record of their career output.
+# Getting Started
 
 ## Self-Hosting
+
+== Free and Open Source Online Service
+
+
+
 
 ### 1. Set Up Google Cloud Credentials (one-time, ~5 minutes)
 
