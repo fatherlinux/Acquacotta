@@ -60,7 +60,7 @@ https://localhost
 
 ## Free and Open Source Online Service
 
-The free and open source service is always free to use. It's serving from the latest container image built in GitHub actions. The local SQLite database is shared, but the data should be private to you. You can always export it with the Export to CVS button under the Reports tab. The online service is configured to enable authentication for Googel Sheets (optional). You can migrate your data to a private Sheet, then use it locally with your own container if you like.
+The free and open source service is always free to use. It's serving from the latest container image built in GitHub actions. The local SQLite database is shared, so do not save any sensitive information. If you require privacy with the online service, please use the Google Drive integration. You can always export it with the Export to CVS button under the Reports tab. The online service is configured to enable authentication for Googel Sheets (optional). You can migrate your data to a private Sheet, then use it locally with your own container if you like.
 - https://acquacotta.crunchtools.com:8443
 
 
