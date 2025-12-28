@@ -393,6 +393,58 @@
         .flatpickr-am-pm { background: transparent; color: var(--text-primary); }
         .flatpickr-am-pm:hover, .flatpickr-am-pm:focus { background: transparent; }
         .flatpickr-time input::selection { background: transparent; }
+
+        /* Mobile Responsive */
+        @media (max-width: 768px) {
+            .container { padding: 0.5rem; }
+
+            header { flex-wrap: wrap; gap: 0.5rem; }
+
+            nav { flex-wrap: wrap; }
+            nav button { flex: 1 1 auto; min-width: 70px; padding: 0.5rem; font-size: 0.875rem; }
+
+            .timer-row {
+                flex-direction: column;
+            }
+            .timer-row .timer-container {
+                flex: none;
+                width: 100%;
+                order: -1;
+            }
+            .timer-row .weekly-overview {
+                width: 100%;
+            }
+            .timer-row .weekly-overview .week-chart-container {
+                min-height: 150px;
+            }
+
+            .timer-display { width: 240px; height: 240px; }
+            .timer-time { font-size: 2.5rem; }
+
+            .summary-cards { grid-template-columns: 1fr; }
+            .summary-card { padding: 1rem; }
+            .summary-value { font-size: 1.5rem; }
+
+            .chart-container { height: 200px; }
+
+            .period-nav { gap: 0.5rem; }
+            .period-nav button { padding: 0.5rem; }
+
+            .week-chart-container { min-height: 150px; }
+            .week-day { min-width: 30px; }
+            .week-day-header { font-size: 0.625rem; }
+            .week-day-hours { font-size: 0.5rem; }
+        }
+
+        @media (max-width: 480px) {
+            nav button { font-size: 0.75rem; padding: 0.4rem; }
+
+            .timer-display { width: 200px; height: 200px; }
+            .timer-time { font-size: 2rem; }
+
+            .duration-presets button,
+            .break-presets button { min-width: 50px; height: 38px; font-size: 0.75rem; }
+        }
     </style>
 </head>
 <body>
@@ -541,9 +593,11 @@
             </div>
             <div class="period-nav">
                 <button class="secondary" onclick="navigatePeriod(-1)">&larr;</button>
-                <span id="period-label" style="min-width: 200px; text-align: center;"></span>
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <span id="period-label" style="text-align: center;"></span>
+                    <button class="secondary" onclick="goToCurrentPeriod()" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" title="Go to current period">Today</button>
+                </div>
                 <button class="secondary" onclick="navigatePeriod(1)">&rarr;</button>
-                <button class="secondary" onclick="goToCurrentPeriod()" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" title="Go to current period">Today</button>
             </div>
             <div class="summary-cards">
                 <div class="card summary-card">
