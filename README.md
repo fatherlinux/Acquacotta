@@ -34,8 +34,15 @@ Acquacotta means "cooked water" in Italian—a traditional, hearty tomato soup. 
 # Getting Started
 
 ## Self-Hosting
+If running rootless, just run:
+```podman run -id -p 443:443 --name acquacotta quay.io/fatherlinux/acquacotta```
 
-== Free and Open Source Online Service
+If running as root
+
+podman run -id -p 443:443 --name acquacotta quay.io/fatherlinux/acquacotta
+
+
+## Free and Open Source Online Service
 
 
 
