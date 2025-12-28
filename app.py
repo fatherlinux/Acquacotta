@@ -63,6 +63,12 @@ DATA_DIR = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local/share")) /
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 DEFAULT_DB_PATH = DATA_DIR / "pomodoros.db"  # For non-logged-in users
 
+# Clear cache on startup (default: true for development, set to "false" in production)
+CLEAR_CACHE_ON_START = os.environ.get("CLEAR_CACHE_ON_START", "true").lower() == "true"
+if CLEAR_CACHE_ON_START and DEFAULT_DB_PATH.exists():
+    DEFAULT_DB_PATH.unlink()
+    print(f"Cleared cache: {DEFAULT_DB_PATH}")
+
 DEFAULT_POMODORO_TYPES = [
     "Content",
     "Customer/Partner/Community",
