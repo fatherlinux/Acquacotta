@@ -32,7 +32,7 @@
             color: var(--text-primary);
             min-height: 100vh;
         }
-        .container { max-width: 1200px; margin: 0 auto; padding: 0.5rem 1rem 1rem 1rem; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 0.5rem 1rem 0.25rem 1rem; }
         .timer-row {
             display: flex;
             gap: 1.5rem;
@@ -463,10 +463,10 @@
             </div>
         </header>
         <nav>
-            <button class="active" data-view="timer">Timer</button>
-            <button data-view="reports">Reports</button>
-            <button data-view="history">History</button>
-            <button data-view="settings">Settings</button>
+            <button class="active" data-view="timer" title="Start a pomodoro timer or log completed work sessions">Timer</button>
+            <button data-view="reports" title="View charts and statistics of your completed pomodoros">Reports</button>
+            <button data-view="history" title="Browse and edit your pomodoro history">History</button>
+            <button data-view="settings" title="Configure timer presets, breaks, and display options">Settings</button>
         </nav>
 
         <!-- Timer View -->
@@ -480,20 +480,20 @@
                         <button class="secondary" onclick="navigateWeek(1)" style="padding: 0.25rem 0.75rem;">&rarr;</button>
                         <button class="secondary" onclick="goToCurrentWeek()" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" title="Go to current week">Today</button>
                     </div>
-                    <div class="week-grid" id="week-grid">
+                    <div class="week-grid" id="week-grid" title="Each block represents one or more pomodoros (typically 25 minutes of focused work each). Click to add entries.">
                         <!-- Days will be populated by JavaScript -->
                     </div>
-                    <div class="week-chart-container" style="margin: 1rem 0;">
+                    <div class="week-chart-container" style="margin: 1rem 0 0.5rem 0;">
                         <canvas id="week-type-chart"></canvas>
                     </div>
-                    <div style="text-align: center; color: var(--text-secondary); font-size: 0.85rem; margin-top: 0.5rem;">
+                    <div style="text-align: center; color: var(--text-secondary); font-size: 0.85rem; margin: 0 0 0.5rem 0;">
                         <span>Total Pomodoros: <span id="week-pomo-count">0</span></span>
                         <span style="margin-left: 1.5rem;">Total Minutes: <span id="week-minutes-count">0</span></span>
                     </div>
                 </div>
 
                 <div class="timer-container">
-                    <div class="timer-display">
+                    <div class="timer-display" title="Drag to set time, or use an external physical timer and log your pomodoros manually">
                         <svg viewBox="0 0 280 280" class="timer-ring">
                             <circle class="timer-ring-bg" cx="140" cy="140" r="120"/>
                             <circle id="timer-progress" class="timer-ring-progress" cx="140" cy="140" r="120"
@@ -536,14 +536,14 @@
                             <div id="timer-status" class="timer-status">Ready</div>
                         </div>
                     </div>
-                    <div class="duration-presets" id="duration-presets">
+                    <div class="duration-presets" id="duration-presets" title="Focus time presets (in minutes) - select how long to work before taking a break">
                         <button data-preset="1">5</button>
                         <button data-preset="2">10</button>
                         <button data-preset="3">15</button>
                         <button data-preset="4" class="active">25</button>
                     </div>
                     <!-- Break Presets -->
-                    <div class="break-presets" id="break-presets">
+                    <div class="break-presets" id="break-presets" title="Break duration presets (in minutes) - short breaks between pomodoros, long break after completing a set">
                         <button id="btn-short-break">5</button>
                         <button id="btn-long-break">15</button>
                     </div>
@@ -561,7 +561,7 @@
                         <textarea id="timer-pomo-notes" placeholder="Notes (optional)" rows="2" style="width: 100%; resize: none;"></textarea>
                     </div>
                     <div class="timer-controls">
-                        <button id="btn-start" class="primary">Start</button>
+                        <button id="btn-start" class="primary" title="Start the built-in timer">Start</button>
                         <button id="btn-pause" class="secondary" style="display:none;">Pause</button>
                         <button id="btn-resume" class="primary" style="display:none;">Resume</button>
                         <button id="btn-stop" class="secondary" style="display:none;">Stop</button>
@@ -838,9 +838,9 @@
             <p style="color: var(--text-secondary); font-size: 0.75rem; text-align: center; margin-top: 1rem;">Settings are saved automatically</p>
         </div>
 
-        <footer style="text-align: center; padding: 2rem 0 1rem; margin-top: 2rem; border-top: 1px solid var(--border-color);">
-            <a href="/privacy" style="color: var(--text-secondary); font-size: 0.75rem; text-decoration: none; margin: 0 1rem;">Privacy Policy</a>
-            <a href="/terms" style="color: var(--text-secondary); font-size: 0.75rem; text-decoration: none; margin: 0 1rem;">Terms of Service</a>
+        <footer style="text-align: center; padding: 0.5rem 0; margin-top: 0.5rem; border-top: 1px solid var(--border-color);">
+            <a href="/privacy" style="color: var(--text-secondary); font-size: 0.625rem; text-decoration: none; margin: 0 1rem;">Privacy Policy</a>
+            <a href="/terms" style="color: var(--text-secondary); font-size: 0.625rem; text-decoration: none; margin: 0 1rem;">Terms of Service</a>
         </footer>
     </div>
 
@@ -963,6 +963,10 @@
             </div>
         </div>
     </div>
+
+    <footer style="text-align: center; padding: 0.25rem 0; margin: 0; color: var(--text-secondary); font-size: 0.625rem; line-height: 1;">
+        <a href="https://www.youtube.com/watch?v=aQ_xKuXo0D0" target="_blank" rel="noopener" style="color: var(--text-secondary);">What is the Pomodoro Technique?</a>
+    </footer>
 
     <script>
         // Type colors
