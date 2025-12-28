@@ -793,6 +793,7 @@
                 <div class="setting-row">
                     <label for="date-format">Date Format</label>
                     <select id="date-format" style="margin-top: 0.5rem;">
+                        <option value="auto">Auto (based on timezone)</option>
                         <option value="us">US (MM/DD/YYYY)</option>
                         <option value="eu">European (DD/MM/YYYY)</option>
                         <option value="iso">ISO (YYYY-MM-DD)</option>
@@ -801,7 +802,7 @@
                 <div class="setting-row">
                     <label for="clock-format">Clock Format</label>
                     <select id="clock-format" style="margin-top: 0.5rem;">
-                        <option value="auto">Auto (based on date format)</option>
+                        <option value="auto">Auto (based on timezone)</option>
                         <option value="12">12-hour (AM/PM)</option>
                         <option value="24">24-hour</option>
                     </select>
@@ -809,7 +810,7 @@
                 <div class="setting-row">
                     <label for="period-labels">Period Labels</label>
                     <select id="period-labels" style="margin-top: 0.5rem;">
-                        <option value="auto">Auto (based on date format)</option>
+                        <option value="auto">Auto (based on timezone)</option>
                         <option value="ampm">AM / PM</option>
                         <option value="morning">Morning / Afternoon</option>
                     </select>
@@ -1084,12 +1085,13 @@
 
         // Initialize or reinitialize Flatpickr with locale-aware week start
         function initDatePickers() {
+            const effectiveDateFormat = getEffectiveDateFormat();
             // US = Sunday first (0), EU/ISO = Monday first (1)
-            const firstDay = settings.date_format === 'us' ? 0 : 1;
+            const firstDay = effectiveDateFormat === 'us' ? 0 : 1;
 
             // Date format for display
-            const dateFormat = settings.date_format === 'eu' ? 'd/m/Y' :
-                               settings.date_format === 'iso' ? 'Y-m-d' : 'm/d/Y';
+            const dateFormat = effectiveDateFormat === 'eu' ? 'd/m/Y' :
+                               effectiveDateFormat === 'iso' ? 'Y-m-d' : 'm/d/Y';
 
             const config = {
                 dateFormat: 'Y-m-d',  // Internal format stays the same
@@ -1116,8 +1118,7 @@
 
         function initTimePickers() {
             // Determine if we should use 12-hour format
-            const is12Hour = settings.clock_format === '12' ||
-                             (settings.clock_format !== '24' && settings.date_format === 'us');
+            const is12Hour = getEffectiveClockFormat() === '12';
 
             const timeConfig = {
                 enableTime: true,
@@ -1167,7 +1168,7 @@
             const day = d.getDate();
             const month = d.getMonth() + 1;
             const year = d.getFullYear();
-            const fmt = format || settings.date_format || 'us';
+            const fmt = format || getEffectiveDateFormat();
 
             if (fmt === 'eu') {
                 return `${day}/${month}/${year}`;
@@ -1188,7 +1189,7 @@
             const month = d.getMonth() + 1;
             const monthName = monthNames[d.getMonth()];
             const year = d.getFullYear();
-            const fmt = format || settings.date_format || 'us';
+            const fmt = format || getEffectiveDateFormat();
 
             if (fmt === 'eu') {
                 return `${dayName}, ${day} ${monthName}`;
@@ -1201,6 +1202,58 @@
         }
 
         // Clock functions
+
+        // Derive date format from timezone region
+        function getDateFormatForTimezone(tz) {
+            if (!tz) return 'us';
+
+            // America/* -> US format (MM/DD/YYYY, 12hr, Sunday first)
+            if (tz.startsWith('America/') || tz.startsWith('US/')) {
+                return 'us';
+            }
+
+            // Europe/*, Africa/*, Australia/*, Atlantic/*, Indian/* -> EU format (DD/MM/YYYY, 24hr, Monday first)
+            if (tz.startsWith('Europe/') || tz.startsWith('Africa/') ||
+                tz.startsWith('Australia/') || tz.startsWith('Atlantic/') ||
+                tz.startsWith('Indian/')) {
+                return 'eu';
+            }
+
+            // Asia/*, Pacific/* -> ISO format (YYYY-MM-DD, 24hr, Monday first)
+            if (tz.startsWith('Asia/') || tz.startsWith('Pacific/')) {
+                return 'iso';
+            }
+
+            // Default to US format
+            return 'us';
+        }
+
+        // Get effective date format (resolves 'auto' to actual format)
+        function getEffectiveDateFormat() {
+            if (settings.date_format === 'auto') {
+                return getDateFormatForTimezone(settings.timezone);
+            }
+            return settings.date_format || 'us';
+        }
+
+        // Get effective clock format (resolves 'auto' based on timezone)
+        function getEffectiveClockFormat() {
+            if (settings.clock_format === 'auto') {
+                const dateFormat = getDateFormatForTimezone(settings.timezone);
+                return dateFormat === 'us' ? '12' : '24';
+            }
+            return settings.clock_format || '12';
+        }
+
+        // Get effective period labels (resolves 'auto' based on timezone)
+        function getEffectivePeriodLabels() {
+            if (settings.period_labels === 'auto') {
+                const dateFormat = getDateFormatForTimezone(settings.timezone);
+                return dateFormat === 'us' ? 'ampm' : 'morning';
+            }
+            return settings.period_labels || 'ampm';
+        }
+
         function populateTimezoneDropdown() {
             const select = document.getElementById('timezone');
             const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -1232,15 +1285,7 @@
             const now = new Date();
 
             // Determine 12-hour or 24-hour format
-            let hour12;
-            if (settings.clock_format === '12') {
-                hour12 = true;
-            } else if (settings.clock_format === '24') {
-                hour12 = false;
-            } else {
-                // Auto: use 12-hour for US, 24-hour for EU/ISO
-                hour12 = settings.date_format === 'us';
-            }
+            const hour12 = getEffectiveClockFormat() === '12';
 
             const timeOptions = {
                 hour: '2-digit',
@@ -1282,7 +1327,7 @@
             const now = new Date();
 
             // US = Sunday first, EU/ISO = Monday first
-            const sundayFirst = settings.date_format === 'us';
+            const sundayFirst = getEffectiveDateFormat() === 'us';
 
             // Get start of current week
             const startOfWeek = new Date(now);
@@ -1366,11 +1411,9 @@
                 });
 
                 // Determine period labels based on setting
-                // Auto: US = AM/PM, EU/ISO = Morning/Afternoon
-                const useMorningLabels = settings.period_labels === 'morning' ||
-                    (settings.period_labels !== 'ampm' && settings.date_format !== 'us');
-                const amLabel = useMorningLabels ? 'Morning' : 'AM';
-                const pmLabel = useMorningLabels ? 'Afternoon' : 'PM';
+                const effectivePeriodLabels = getEffectivePeriodLabels();
+                const amLabel = effectivePeriodLabels === 'morning' ? 'Morning' : 'AM';
+                const pmLabel = effectivePeriodLabels === 'morning' ? 'Afternoon' : 'PM';
 
                 html += `<div class="week-day">
                     <div class="week-day-header ${isToday ? 'today' : ''}">
@@ -3087,9 +3130,9 @@
             document.getElementById('timezone').value = settings.timezone;
             updateClock();
 
-            // Date format (default to US)
+            // Date format (default to auto)
             if (!settings.date_format) {
-                settings.date_format = 'us';
+                settings.date_format = 'auto';
             }
             document.getElementById('date-format').value = settings.date_format;
 
@@ -3243,10 +3286,19 @@
             autoSaveSettings();
         });
 
-        // Timezone dropdown - auto-save
+        // Timezone dropdown - auto-save and refresh views (auto settings derive from timezone)
         document.getElementById('timezone').addEventListener('change', e => {
             settings.timezone = e.target.value;
             updateClock();
+
+            // Reinitialize pickers and views (auto settings will use new timezone)
+            initDatePickers();
+            initTimePickers();
+            loadWeeklyOverview();
+            if (document.getElementById('history-view').classList.contains('active')) {
+                loadHistory();
+            }
+
             autoSaveSettings();
         });
 
