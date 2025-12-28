@@ -60,16 +60,53 @@ https://localhost
 
 ## Free and Open Source Online Service
 
-The free service is always available at: 
-```
-https://acquacotta.crunchtools.com:8443
-```
+The free and open source service is always free to use. It's serving from the latest container image built in GitHub actions. The local SQLite database is shared, but the data should be private to you. You can always export it with the Export to CVS button under the Reports tab. The online service is configured to enable authentication for Googel Sheets (optional). You can migrate your data to a private Sheet, then use it locally with your own container if you like.
+- https://acquacotta.crunchtools.com:8443
 
-This service is updated to use the latest container built in GitHub actions. It's configured to allow Authentication through Google so that you can save your data to a Googel Sheet (optional). The local SQLite database is shared, so please do not save anything important.
+
 
 # Advanced Operations
 
-### 1. Set Up Google Cloud Credentials (one-time, ~5 minutes)
+## Running Without Podman/Docker
+
+```bash
+# Install dependencies
+pip install -r requirements.txt
+
+# Set environment variables
+export GOOGLE_CLIENT_ID="your-client-id"
+export GOOGLE_CLIENT_SECRET="your-client-secret"
+export FLASK_SECRET_KEY="random-secret"
+
+# Run
+python app.py
+```
+
+## Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `GOOGLE_CLIENT_ID` | Yes | OAuth Client ID from Google Cloud Console |
+| `GOOGLE_CLIENT_SECRET` | Yes | OAuth Client Secret from Google Cloud Console |
+| `FLASK_SECRET_KEY` | Yes | Random string for session encryption |
+| `FLASK_HOST` | No | Host to bind to (default: `127.0.0.1`, use `0.0.0.0` for container) |
+| `CLEAR_CACHE_ON_START` | No | Clear SQLite cache on startup (default: `true`) |
+
+## Data Storage
+
+By default, your pomodoro data is stored in a SQLite database. The directory can be bind mounted into the container to give persistence to the data. You can also export it through the CSV button on the Reports tab. If you use the online service, this database is shared.
+```
+/data/acquacotta/pomodoros.db
+```
+
+If you optionally configure Google Drive, a Google Sheet will get created. You own and control your data. you can make backup copies, or analyze it with Gemini, etc:
+- **Document Name**: Acquacotta - Pomodoro Tracker
+- **Pomodoros Tab**: All your tracked pomodoros
+- **Settings Tab**: Your app preferences
+
+## Setup your service to accept Google Authentication
+
+### Set Up Google Cloud Credentials (one-time, ~5 minutes)
 
 Acquacotta uses Google Sheets to store your data. Each user needs to create their own Google Cloud credentials.
 
@@ -150,44 +187,7 @@ Then open http://localhost:5000 in your browser.
 3. Authorize the app to access Google Sheets
 4. A new spreadsheet called "Acquacotta - Pomodoro Tracker" will be created in your Google Drive
 
-## Environment Variables
-
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `GOOGLE_CLIENT_ID` | Yes | OAuth Client ID from Google Cloud Console |
-| `GOOGLE_CLIENT_SECRET` | Yes | OAuth Client Secret from Google Cloud Console |
-| `FLASK_SECRET_KEY` | Yes | Random string for session encryption |
-| `FLASK_HOST` | No | Host to bind to (default: `127.0.0.1`, use `0.0.0.0` for container) |
-| `CLEAR_CACHE_ON_START` | No | Clear SQLite cache on startup (default: `true`) |
-
-## Running Without Docker
-
-```bash
-# Install dependencies
-pip install -r requirements.txt
-
-# Set environment variables
-export GOOGLE_CLIENT_ID="your-client-id"
-export GOOGLE_CLIENT_SECRET="your-client-secret"
-export FLASK_SECRET_KEY="random-secret"
-
-# Run
-python app.py
-```
-
-## Data Storage
-
-Your pomodoro data is stored in a Google Sheet in your own Google Drive:
-- **Pomodoros tab**: All your tracked pomodoros
-- **Settings tab**: Your app preferences
-
-You own your data and can access/edit it directly in Google Sheets. Power users can:
-- Make backups anytime
-- Analyze patterns with LLMs
-- Build custom reports
-- Export to other tools
-
-## Troubleshooting
+# Troubleshooting
 
 ### "Sign in with Google" button doesn't work
 
@@ -204,6 +204,6 @@ http://localhost:5000/auth/callback
 
 This is normal for personal OAuth apps. Click "Advanced" → "Go to Acquacotta (unsafe)" to continue. Your credentials are only used by you.
 
-## License
+# License
 
 This project is licensed under the GPL-3.0 License.
