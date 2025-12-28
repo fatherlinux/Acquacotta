@@ -32,20 +32,42 @@ Acquacotta was created as fun project by a veteran of the Pomodoro Technique wit
 Acquacotta means "cooked water" in Italian—a traditional, hearty tomato soup. Since the Pomodoro technique is named after the tomato-shaped kitchen timer (tomato is *Pomodoro* in Italian), we felt a "complete meal" of a system—timer, automated logging, and powerful reporting—deserved a name that felt just as substantial.
 
 # Getting Started
+Every time a PR is merged, GitHub Actions builds and pushes a new version of the container to quay.io/fatherlinux/acquacotta This container image is free to use.
 
 ## Self-Hosting
-If running rootless, just run:
-```podman run -id -p 443:443 --name acquacotta quay.io/fatherlinux/acquacotta```
 
-If running as root
+### Rootless
 
+Just run:
+```
 podman run -id -p 443:443 --name acquacotta quay.io/fatherlinux/acquacotta
+```
+Connect to to the following URL (accept the auto-generated SSL certificate):
+```
+https://localhost:8443
+```
 
+### As root
+
+Just run:
+```
+podman run -id -p 443:443 --name acquacotta quay.io/fatherlinux/acquacotta
+```
+Connect to to the following URL (accept the auto-generated SSL certificate):
+```
+https://localhost
+```
 
 ## Free and Open Source Online Service
 
+The free service is always available at: 
+```
+https://acquacotta.crunchtools.com:8443
+```
 
+This service is updated to use the latest container built in GitHub actions. It's configured to allow Authentication through Google so that you can save your data to a Googel Sheet (optional). The local SQLite database is shared, so please do not save anything important.
 
+# Advanced Operations
 
 ### 1. Set Up Google Cloud Credentials (one-time, ~5 minutes)
 
