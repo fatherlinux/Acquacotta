@@ -39,6 +39,19 @@ All work must align with these principles (in priority order):
 4. Never add analytics, tracking, or telemetry
 5. Keep the UI minimal and distraction-free
 
+## After Merging a PR
+
+**ALWAYS** create a version tag after merging any PR:
+
+1. Determine version bump type based on the constitution's semver rules:
+   - **Patch** (x.y.Z): Bug fixes, minor tweaks, UI adjustments
+   - **Minor** (x.Y.0): New features or significant enhancements
+   - **Major** (X.0.0): Breaking changes to data format, API, or schema
+2. Create and push the git tag (e.g., `git tag v1.18.1 && git push origin v1.18.1`)
+3. This triggers the container build workflow automatically
+
+Do NOT wait to be asked - tagging is part of the merge process.
+
 ## Spec-Kit Commands
 
 Use these slash commands for structured development:
@@ -64,3 +77,10 @@ app.py                        # Flask application
 sheets_storage.py             # Google Sheets operations
 templates/                    # HTML templates
 ```
+
+## Active Technologies
+- JavaScript (ES6+), embedded in HTML + None (vanilla JS, no frameworks per constitution) (001-slidable-timer)
+- N/A (timer state is in-memory only) (001-slidable-timer)
+
+## Recent Changes
+- 001-slidable-timer: Added JavaScript (ES6+), embedded in HTML + None (vanilla JS, no frameworks per constitution)
