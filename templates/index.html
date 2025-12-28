@@ -476,9 +476,11 @@
                 <div class="weekly-overview">
                     <div style="display: flex; justify-content: center; align-items: center; gap: 1rem; margin-bottom: 1rem;">
                         <button class="secondary" onclick="navigateWeek(-1)" style="padding: 0.25rem 0.75rem;">&larr;</button>
-                        <h3 id="week-overview-label" style="margin: 0; color: var(--text-secondary); min-width: 150px; text-align: center;">This Week</h3>
+                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <h3 id="week-overview-label" style="margin: 0; color: var(--text-secondary); min-width: 150px; text-align: center;">This Week</h3>
+                            <button class="secondary" onclick="goToCurrentWeek()" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" title="Go to current week">Today</button>
+                        </div>
                         <button class="secondary" onclick="navigateWeek(1)" style="padding: 0.25rem 0.75rem;">&rarr;</button>
-                        <button class="secondary" onclick="goToCurrentWeek()" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" title="Go to current week">Today</button>
                     </div>
                     <div class="week-grid" id="week-grid" title="Each block represents one or more pomodoros (typically 25 minutes of focused work each). Click to add entries.">
                         <!-- Days will be populated by JavaScript -->
