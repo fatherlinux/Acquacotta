@@ -21,7 +21,7 @@ Technical Features:
 - Uses an internal SQLite database by default
 - Designed to run in a Podman/Docker container or use the free online service
 - Seemlessly work between online and container using data and setting optionally saved in a private Google Sheet
-- Responsive authors - feel free to file any and all issues [hee](https://github.com/fatherlinux/Acquacotta/issues)
+- Responsive authors - feel free to file any and all issues [here](https://github.com/fatherlinux/Acquacotta/issues)
 
 ## The Story Behind the Soup
 
