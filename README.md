@@ -187,6 +187,62 @@ Then open http://localhost:5000 in your browser.
 3. Authorize the app to access Google Sheets
 4. A new spreadsheet called "Acquacotta - Pomodoro Tracker" will be created in your Google Drive
 
+## Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `GOOGLE_CLIENT_ID` | Yes | OAuth Client ID from Google Cloud Console |
+| `GOOGLE_CLIENT_SECRET` | Yes | OAuth Client Secret from Google Cloud Console |
+| `FLASK_SECRET_KEY` | Yes | Random string for session encryption |
+| `FLASK_HOST` | No | Host to bind to (default: `127.0.0.1`, use `0.0.0.0` for container) |
+| `CLEAR_CACHE_ON_START` | No | Clear SQLite cache on startup (default: `true`) |
+
+## Running Without Docker
+
+```bash
+# Install dependencies
+pip install -r requirements.txt
+
+# Set environment variables
+export GOOGLE_CLIENT_ID="your-client-id"
+export GOOGLE_CLIENT_SECRET="your-client-secret"
+export FLASK_SECRET_KEY="random-secret"
+
+# Run
+python app.py
+```
+
+## Data Storage
+
+Your pomodoro data is stored in a Google Sheet in your own Google Drive:
+- **Pomodoros tab**: All your tracked pomodoros
+- **Settings tab**: Your app preferences
+
+You own your data and can access/edit it directly in Google Sheets. Power users can:
+- Make backups anytime
+- Analyze patterns with LLMs
+- Build custom reports
+- Export to other tools
+
+### Persisting the SQLite Cache (Optional)
+
+Acquacotta uses SQLite as a local cache for fast reads, with Google Sheets as the persistent backend. By default, the cache is cleared on container restart and re-syncs from Google Sheets on login.
+
+To persist the cache between restarts (avoiding re-sync delay):
+
+```bash
+podman run -d --name acquacotta \
+  --network host \
+  -v /path/on/host:/root/.local/share/acquacotta:Z \
+  -e CLEAR_CACHE_ON_START=false \
+  -e GOOGLE_CLIENT_ID="your-client-id-here" \
+  -e GOOGLE_CLIENT_SECRET="your-client-secret-here" \
+  -e FLASK_SECRET_KEY="any-random-string-here" \
+  quay.io/fatherlinux/acquacotta:latest
+```
+
+> **Note:** The `:Z` suffix is required on SELinux-enabled systems (Fedora, RHEL, CentOS) for bind mounts.
+
 # Troubleshooting
 
 ### "Sign in with Google" button doesn't work
