@@ -158,6 +158,25 @@ You own your data and can access/edit it directly in Google Sheets. Power users 
 - Build custom reports
 - Export to other tools
 
+### Persisting the SQLite Cache (Optional)
+
+Acquacotta uses SQLite as a local cache for fast reads, with Google Sheets as the persistent backend. By default, the cache is cleared on container restart and re-syncs from Google Sheets on login.
+
+To persist the cache between restarts (avoiding re-sync delay):
+
+```bash
+podman run -d --name acquacotta \
+  --network host \
+  -v /path/on/host:/root/.local/share/acquacotta:Z \
+  -e CLEAR_CACHE_ON_START=false \
+  -e GOOGLE_CLIENT_ID="your-client-id-here" \
+  -e GOOGLE_CLIENT_SECRET="your-client-secret-here" \
+  -e FLASK_SECRET_KEY="any-random-string-here" \
+  quay.io/fatherlinux/acquacotta:latest
+```
+
+> **Note:** The `:Z` suffix is required on SELinux-enabled systems (Fedora, RHEL, CentOS) for bind mounts.
+
 ## Troubleshooting
 
 ### "Sign in with Google" button doesn't work
