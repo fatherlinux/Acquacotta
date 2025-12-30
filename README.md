@@ -21,7 +21,7 @@ Technical Features:
 - Uses an internal SQLite database by default
 - Designed to run in a Podman/Docker container or use the free online service
 - Seemlessly work between online and container using data and setting optionally saved in a private Google Sheet
-- Responsive authors - feel free to file any and all issues [hee](https://github.com/fatherlinux/Acquacotta/issues)
+- Responsive authors - feel free to file any and all issues [here](https://github.com/fatherlinux/Acquacotta/issues)
 
 ## The Story Behind the Soup
 
@@ -32,15 +32,81 @@ Acquacotta was created as fun project by a veteran of the Pomodoro Technique wit
 Acquacotta means "cooked water" in Italian—a traditional, hearty tomato soup. Since the Pomodoro technique is named after the tomato-shaped kitchen timer (tomato is *Pomodoro* in Italian), we felt a "complete meal" of a system—timer, automated logging, and powerful reporting—deserved a name that felt just as substantial.
 
 # Getting Started
+Every time a PR is merged, GitHub Actions builds and pushes a new version of the container to quay.io/fatherlinux/acquacotta This container image is free to use.
 
 ## Self-Hosting
 
-== Free and Open Source Online Service
+### Rootless
+
+Just run:
+```
+podman run -id -p 443:443 --name acquacotta quay.io/fatherlinux/acquacotta
+```
+Connect to to the following URL (accept the auto-generated SSL certificate):
+```
+https://localhost:8443
+```
+
+### As root
+
+Just run:
+```
+podman run -id -p 443:443 --name acquacotta quay.io/fatherlinux/acquacotta
+```
+Connect to to the following URL (accept the auto-generated SSL certificate):
+```
+https://localhost
+```
+
+## Free and Open Source Online Service
+
+The free and open source service is always free to use. It's serving from the latest container image built in GitHub actions. The local SQLite database is shared, so do not save any sensitive information. If you require privacy with the online service, please use the Google Drive integration. You can always export it with the Export to CVS button under the Reports tab. The online service is configured to enable authentication for Googel Sheets (optional). You can migrate your data to a private Sheet, then use it locally with your own container if you like.
+- https://acquacotta.crunchtools.com:8443
 
 
 
+# Advanced Operations
 
-### 1. Set Up Google Cloud Credentials (one-time, ~5 minutes)
+## Running Without Podman/Docker
+
+```bash
+# Install dependencies
+pip install -r requirements.txt
+
+# Set environment variables
+export GOOGLE_CLIENT_ID="your-client-id"
+export GOOGLE_CLIENT_SECRET="your-client-secret"
+export FLASK_SECRET_KEY="random-secret"
+
+# Run
+python app.py
+```
+
+## Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `GOOGLE_CLIENT_ID` | Yes | OAuth Client ID from Google Cloud Console |
+| `GOOGLE_CLIENT_SECRET` | Yes | OAuth Client Secret from Google Cloud Console |
+| `FLASK_SECRET_KEY` | Yes | Random string for session encryption |
+| `FLASK_HOST` | No | Host to bind to (default: `127.0.0.1`, use `0.0.0.0` for container) |
+| `CLEAR_CACHE_ON_START` | No | Clear SQLite cache on startup (default: `true`) |
+
+## Data Storage
+
+By default, your pomodoro data is stored in a SQLite database. The directory can be bind mounted into the container to give persistence to the data. You can also export it through the CSV button on the Reports tab. If you use the online service, this database is shared.
+```
+/data/acquacotta/pomodoros.db
+```
+
+If you optionally configure Google Drive, a Google Sheet will get created. You own and control your data. you can make backup copies, or analyze it with Gemini, etc:
+- **Document Name**: Acquacotta - Pomodoro Tracker
+- **Pomodoros Tab**: All your tracked pomodoros
+- **Settings Tab**: Your app preferences
+
+## Setup your service to accept Google Authentication
+
+### Set Up Google Cloud Credentials (one-time, ~5 minutes)
 
 Acquacotta uses Google Sheets to store your data. Each user needs to create their own Google Cloud credentials.
 
@@ -177,7 +243,7 @@ podman run -d --name acquacotta \
 
 > **Note:** The `:Z` suffix is required on SELinux-enabled systems (Fedora, RHEL, CentOS) for bind mounts.
 
-## Troubleshooting
+# Troubleshooting
 
 ### "Sign in with Google" button doesn't work
 
@@ -194,6 +260,6 @@ http://localhost:5000/auth/callback
 
 This is normal for personal OAuth apps. Click "Advanced" → "Go to Acquacotta (unsafe)" to continue. Your credentials are only used by you.
 
-## License
+# License
 
 This project is licensed under the GPL-3.0 License.
