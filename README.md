@@ -6,7 +6,7 @@ Key Features
 - Implements all features of the standard pomodoro technique (25 minute focus, 5 minuute short break, 15 minute long break)
 - Provides 4 pre-set focus timers and 2 pre-set break timers (all configurable)
 - Integrated timer with sliadable face to provide the same functionality as a physical tomato timer on your desk
-- Seemlessly works weth an external pomodoro timer sitting on your desk
+- Seemlessly works with an external pomodoro timer sitting on your desk
 - Free and open source [online service](https://acquacotta.crunchtools.com:8443) or use in a local container
 
 Advanced Time Management:
