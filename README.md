@@ -42,7 +42,7 @@ Just run:
 ```
 podman run -id -p 443:443 --name acquacotta quay.io/fatherlinux/acquacotta
 ```
-Connect to to the following URL (accept the auto-generated SSL certificate):
+Connect to the following URL (accept the auto-generated SSL certificate):
 ```
 https://localhost:8443
 ```
@@ -53,7 +53,7 @@ Just run:
 ```
 podman run -id -p 443:443 --name acquacotta quay.io/fatherlinux/acquacotta
 ```
-Connect to to the following URL (accept the auto-generated SSL certificate):
+Connect to the following URL (accept the auto-generated SSL certificate):
 ```
 https://localhost
 ```
