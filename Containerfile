@@ -1,6 +1,6 @@
 FROM registry.access.redhat.com/ubi10/ubi:latest
 
-RUN dnf install -y python3.12 python3.12-pip httpd mod_ssl openssl && dnf clean all
+RUN dnf install -y python3.12 python3.12-pip httpd mod_ssl openssl procps-ng && dnf clean all
 
 WORKDIR /app
 
