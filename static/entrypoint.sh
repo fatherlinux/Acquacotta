@@ -1,21 +1,7 @@
 #!/bin/bash
 set -e
 
-# Auto-generate self-signed SSL certificates if not bind-mounted
-CERT_FILE="/etc/pki/tls/certs/origin.crt"
-KEY_FILE="/etc/pki/tls/private/origin.key"
-
-if [ ! -f "$CERT_FILE" ] || [ ! -f "$KEY_FILE" ]; then
-    echo "SSL certificates not found, generating self-signed certificates..."
-    mkdir -p /etc/pki/tls/certs /etc/pki/tls/private
-    openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-        -keyout "$KEY_FILE" \
-        -out "$CERT_FILE" \
-        -subj "/CN=localhost/O=Acquacotta/C=US" \
-        2>/dev/null
-    chmod 600 "$KEY_FILE"
-    echo "Self-signed SSL certificates generated."
-fi
+# SSL is handled by external reverse proxy
 
 # Start Flask with Gunicorn (production WSGI server)
 start_flask() {
