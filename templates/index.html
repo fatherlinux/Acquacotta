@@ -446,6 +446,7 @@
             .break-presets button { min-width: 50px; height: 38px; font-size: 0.75rem; }
         }
     </style>
+    <script src="{{ url_for('static', filename='js/utils.js') }}"></script>
 </head>
 <body>
     <div class="container">
@@ -1025,6 +1026,7 @@
         let weekOverviewOffset = 0; // 0 = this week, -1 = last week, etc.
         let selectedPreset = 4; // Which duration preset is selected (1-4)
         let pomodorosCompleted = 0; // Count for long break logic
+        let lastKnownDate = null; // Track date for midnight refresh
 
         // Drag state for slidable timer
         let isDragging = false;
@@ -1285,6 +1287,19 @@
         function updateClock() {
             const tz = settings.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
             const now = new Date();
+
+            // Check for date change (midnight crossing or returning from background)
+            const todayStr = now.toLocaleDateString('en-CA', { timeZone: tz });
+            if (lastKnownDate !== null && lastKnownDate !== todayStr) {
+                // Date has changed - refresh views to update "today" highlighting
+                loadWeeklyOverview();
+                // Refresh reports if on that tab
+                const reportsTab = document.querySelector('.nav-btn[data-view="reports"]');
+                if (reportsTab && reportsTab.classList.contains('active')) {
+                    loadReport();
+                }
+            }
+            lastKnownDate = todayStr;
 
             // Determine 12-hour or 24-hour format
             const hour12 = getEffectiveClockFormat() === '12';
@@ -3779,6 +3794,15 @@
         // Init
         populateTimezoneDropdown();
         startClock();
+
+        // Handle visibility change to update day highlighting when tab becomes visible
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) {
+                // Tab became visible - trigger clock update to check for date change
+                updateClock();
+            }
+        });
+
         (async () => {
             await checkAuthStatus();
             await loadWeeklyOverview();
