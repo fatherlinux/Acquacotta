@@ -1,0 +1,48 @@
+# Test image for Acquacotta
+# Built on top of acquacotta-base - includes all test frameworks
+# Used by CI/CD for running tests quickly
+#
+# Build: podman build -f Containerfile.test -t quay.io/fatherlinux/acquacotta-test .
+
+FROM quay.io/fatherlinux/acquacotta-base:latest
+
+# Install Node.js for JavaScript tests (Puppeteer)
+RUN dnf install -y nodejs npm && dnf clean all
+
+# Install Rust for Gourmand
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+ENV PATH="/root/.cargo/bin:${PATH}"
+
+# Install Gourmand from Codeberg
+RUN cargo install --git https://codeberg.org/mattdm/gourmand.git
+
+# Install Python dev/test dependencies
+COPY requirements-dev.txt .
+RUN pip3.12 install --no-cache-dir -r requirements-dev.txt
+
+# Install Puppeteer for JS tests
+RUN npm install -g puppeteer
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+RUN dnf install -y chromium && dnf clean all
+
+WORKDIR /app
+
+# Copy application code
+COPY app.py .
+COPY sheets_storage.py .
+COPY templates/ templates/
+COPY static/ static/
+
+# Copy test code and config
+COPY tests/ tests/
+COPY pyproject.toml .
+COPY gourmand.toml .
+COPY gourmand-exceptions.toml .
+
+# Set test environment
+ENV FLASK_SECRET_KEY=test-secret-key
+ENV CLEAR_CACHE_ON_START=false
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
+
+# Default command runs all tests
+CMD ["sh", "-c", "ruff check . && ruff format --check . && pytest tests/ -v && gourmand --full ."]

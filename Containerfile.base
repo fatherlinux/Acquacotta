@@ -1,0 +1,28 @@
+# Base image for Acquacotta
+# Contains slow-to-install infrastructure: RPMs, Python packages, Apache config
+# Rebuild only when dependencies change
+#
+# Build: podman build -f Containerfile.base -t quay.io/fatherlinux/acquacotta-base .
+
+FROM registry.access.redhat.com/ubi10/ubi:latest
+
+# Install system packages (slow)
+RUN dnf install -y python3.12 python3.12-pip httpd procps-ng && dnf clean all
+
+WORKDIR /app
+
+# Install Python production dependencies (slow)
+COPY requirements.txt .
+RUN pip3.12 install --no-cache-dir -r requirements.txt
+
+# Apache HTTP reverse proxy configuration (SSL handled by external reverse proxy)
+COPY static/acquacotta-http.conf /etc/httpd/conf.d/acquacotta.conf
+RUN rm -f /etc/httpd/conf.d/ssl.conf /etc/httpd/conf.d/welcome.conf
+
+# Entrypoint script
+COPY static/entrypoint.sh /entrypoint.sh
+RUN chmod 755 /entrypoint.sh
+
+ENV FLASK_HOST=127.0.0.1
+
+EXPOSE 80
