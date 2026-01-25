@@ -23,8 +23,10 @@ repos:
     hooks:
       - id: ruff
         args: [--fix, --exit-non-zero-on-fix]
+        stages: [pre-commit, pre-merge-commit]
       - id: ruff-format
         args: [--check]
+        stages: [pre-commit, pre-merge-commit]
 
   # Run Python tests (local hook)
   - repo: local
@@ -35,4 +37,4 @@ repos:
         language: system
         pass_filenames: false
         always_run: true
-        stages: [commit]
+        stages: [pre-commit, pre-merge-commit]
