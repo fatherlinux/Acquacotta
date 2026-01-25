@@ -1,1 +1,1 @@
-# Acquacotta test suite
+"""Acquacotta test suite."""

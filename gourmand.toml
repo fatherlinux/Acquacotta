@@ -1,0 +1,20 @@
+# Gourmand Configuration
+# See https://codeberg.org/mattdm/gourmand for documentation
+
+[checks]
+# All checks enabled by default. Uncomment to disable specific checks.
+
+# Disable checks that conflict with our project patterns:
+
+# implicit_state_machine - Too many false positives with Flask route handlers
+implicit_state_machine = false
+
+# prefer_match - Python doesn't have pattern matching in the same way as Rust
+prefer_match = false
+
+[global]
+# Exclude spec-kit directories from scanning
+excluded_paths = [
+    "specs/**",
+    ".specify/**",
+]

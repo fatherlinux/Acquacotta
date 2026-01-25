@@ -74,7 +74,7 @@ def sample_pomodoro():
         "type": "Content",
         "start_time": "2024-01-15T10:00:00Z",
         "end_time": "2024-01-15T10:25:00Z",
-        "duration_minutes": 25,
+        "duration_minutes": app_module.DEFAULT_POMODORO_DURATION,
         "notes": "Test notes",
     }
 
@@ -83,12 +83,12 @@ def sample_pomodoro():
 def sample_settings():
     """Return sample settings data for testing."""
     return {
-        "timer_preset_1": 5,
-        "timer_preset_2": 10,
-        "timer_preset_3": 15,
-        "timer_preset_4": 25,
-        "short_break_minutes": 5,
-        "long_break_minutes": 15,
+        "timer_preset_1": app_module.DEFAULT_SHORT_BREAK,
+        "timer_preset_2": app_module.TIMER_PRESET_MEDIUM,
+        "timer_preset_3": app_module.DEFAULT_LONG_BREAK,
+        "timer_preset_4": app_module.DEFAULT_POMODORO_DURATION,
+        "short_break_minutes": app_module.DEFAULT_SHORT_BREAK,
+        "long_break_minutes": app_module.DEFAULT_LONG_BREAK,
         "pomodoro_types": ["Content", "Product", "Team"],
     }
 
