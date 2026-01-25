@@ -38,12 +38,24 @@ select = [
     "B",      # flake8-bugbear
     "C4",     # flake8-comprehensions
     "UP",     # pyupgrade
+    "C901",   # McCabe complexity
+    "PLR",    # Pylint refactor rules
 ]
 ignore = [
     "E501",   # line too long (handled by formatter)
     "B008",   # do not perform function calls in argument defaults
     "B904",   # allow raise without from in except
 ]
+
+[tool.ruff.lint.pylint]
+max-branches = 10
+max-statements = 50
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["PLR2004"]  # Magic values acceptable in test assertions
 
 [tool.ruff.lint.isort]
 known-first-party = ["app", "sheets_storage"]

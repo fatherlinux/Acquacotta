@@ -27,5 +27,10 @@ Thumbs.db
 # App data
 *.db
 
+# Linting/Tools
+.gourmand-cache/
+.ruff_cache/
+.pytest_cache/
+
 # Other
 start.sh
