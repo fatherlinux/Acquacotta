@@ -7,6 +7,7 @@ import sqlite3
 import threading
 import uuid
 from datetime import datetime, timedelta
+from http import HTTPStatus
 from pathlib import Path
 
 # Allow OAuth scope changes (users may have previously granted different scopes)
@@ -40,7 +41,7 @@ Session(app)
 def handle_exception(e):
     """Return JSON for API errors instead of HTML."""
     if request.path.startswith("/api/"):
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": str(e)}), HTTPStatus.INTERNAL_SERVER_ERROR
     # For non-API routes, re-raise to get default handling
     raise e
 
@@ -68,6 +69,28 @@ CLEAR_CACHE_ON_START = os.environ.get("CLEAR_CACHE_ON_START", "true").lower() ==
 if CLEAR_CACHE_ON_START:
     DEFAULT_DB_PATH.unlink(missing_ok=True)
     print(f"Cleared cache: {DEFAULT_DB_PATH}")
+
+# Timer duration constants (in minutes)
+DEFAULT_POMODORO_DURATION = 25
+DEFAULT_SHORT_BREAK = 5
+DEFAULT_LONG_BREAK = 15
+TIMER_PRESET_MEDIUM = 10
+
+# Cache/sync timing constants (in seconds)
+SYNC_CACHE_TTL = 300  # 5 minutes
+BACKGROUND_SYNC_INTERVAL = 5000  # milliseconds for JS polling
+
+# Report period constants
+MONTHS_IN_YEAR = 12
+
+# Flask default port
+DEFAULT_PORT = 5000
+
+# Default daily goal (in minutes)
+DEFAULT_DAILY_GOAL = 300  # 5 hours
+
+# Default pomodoros before long break
+DEFAULT_POMODOROS_UNTIL_LONG_BREAK = 4
 
 DEFAULT_POMODORO_TYPES = [
     "Content",
@@ -330,13 +353,13 @@ def sync_from_sheets(db_path, credentials_dict, spreadsheet_id):
 
     # Get settings from Google Sheets
     defaults = {
-        "timer_preset_1": 5,
-        "timer_preset_2": 10,
-        "timer_preset_3": 15,
-        "timer_preset_4": 25,
-        "short_break_minutes": 5,
-        "long_break_minutes": 15,
-        "pomodoros_until_long_break": 4,
+        "timer_preset_1": DEFAULT_SHORT_BREAK,
+        "timer_preset_2": TIMER_PRESET_MEDIUM,
+        "timer_preset_3": DEFAULT_LONG_BREAK,
+        "timer_preset_4": DEFAULT_POMODORO_DURATION,
+        "short_break_minutes": DEFAULT_SHORT_BREAK,
+        "long_break_minutes": DEFAULT_LONG_BREAK,
+        "pomodoros_until_long_break": DEFAULT_POMODOROS_UNTIL_LONG_BREAK,
         "always_use_short_break": False,
         "sound_enabled": True,
         "notifications_enabled": True,
@@ -350,7 +373,7 @@ def sync_from_sheets(db_path, credentials_dict, spreadsheet_id):
         "working_hours_end": "17:00",
         "clock_format": "auto",
         "period_labels": "auto",
-        "daily_minutes_goal": 300,
+        "daily_minutes_goal": DEFAULT_DAILY_GOAL,
     }
     settings = sheets_storage.get_settings(service, spreadsheet_id, defaults)
 
@@ -454,7 +477,7 @@ def auth_google():
     try:
         flow = get_google_flow()
         if not flow:
-            return jsonify({"error": "Google OAuth not configured"}), 500
+            return jsonify({"error": "Google OAuth not configured"}), HTTPStatus.INTERNAL_SERVER_ERROR
         authorization_url, state = flow.authorization_url(
             access_type="offline",
             include_granted_scopes="true",
@@ -465,7 +488,7 @@ def auth_google():
     except Exception as e:
         import traceback
 
-        return f"<pre>Error: {e}\n\n{traceback.format_exc()}</pre>", 500
+        return f"<pre>Error: {e}\n\n{traceback.format_exc()}</pre>", HTTPStatus.INTERNAL_SERVER_ERROR
 
 
 @app.route("/auth/callback")
@@ -474,7 +497,7 @@ def auth_callback():
     try:
         flow = get_google_flow()
         if not flow:
-            return jsonify({"error": "Google OAuth not configured"}), 500
+            return jsonify({"error": "Google OAuth not configured"}), HTTPStatus.INTERNAL_SERVER_ERROR
 
         flow.fetch_token(authorization_response=request.url)
         credentials = flow.credentials
@@ -589,7 +612,7 @@ def auth_callback():
     except Exception as e:
         import traceback
 
-        return f"<pre>Error: {e}\n\n{traceback.format_exc()}</pre>", 500
+        return f"<pre>Error: {e}\n\n{traceback.format_exc()}</pre>", HTTPStatus.INTERNAL_SERVER_ERROR
 
 
 @app.route("/auth/logout")
@@ -634,13 +657,13 @@ def auth_status():
 def update_spreadsheet():
     """Update the spreadsheet ID for the current user."""
     if "user_email" not in session:
-        return jsonify({"error": "Not logged in"}), 401
+        return jsonify({"error": "Not logged in"}), HTTPStatus.UNAUTHORIZED
 
     data = request.get_json()
     new_spreadsheet_id = data.get("spreadsheet_id", "").strip()
 
     if not new_spreadsheet_id:
-        return jsonify({"error": "Spreadsheet ID is required"}), 400
+        return jsonify({"error": "Spreadsheet ID is required"}), HTTPStatus.BAD_REQUEST
 
     # Validate that we can access this spreadsheet
     try:
@@ -653,8 +676,8 @@ def update_spreadsheet():
                 {
                     "error": "Cannot access this spreadsheet. With drive.file scope, you can only access spreadsheets created by this app instance."
                 }
-            ), 400
-        return jsonify({"error": f"Cannot access spreadsheet: {error_msg}"}), 400
+            ), HTTPStatus.BAD_REQUEST
+        return jsonify({"error": f"Cannot access spreadsheet: {error_msg}"}), HTTPStatus.BAD_REQUEST
 
     # Update session
     session["spreadsheet_id"] = new_spreadsheet_id
@@ -698,7 +721,7 @@ def create_pomodoro():
 
     pomodoro_id = str(uuid.uuid4())
     end_time = datetime.utcnow()
-    duration = data.get("duration_minutes", 25)
+    duration = data.get("duration_minutes", DEFAULT_POMODORO_DURATION)
     start_time = end_time - timedelta(minutes=duration)
 
     pomodoro = {
@@ -841,13 +864,13 @@ def create_manual_pomodoro():
 def get_settings():
     """Get user settings from SQLite cache."""
     defaults = {
-        "timer_preset_1": 5,
-        "timer_preset_2": 10,
-        "timer_preset_3": 15,
-        "timer_preset_4": 25,
-        "short_break_minutes": 5,
-        "long_break_minutes": 15,
-        "pomodoros_until_long_break": 4,
+        "timer_preset_1": DEFAULT_SHORT_BREAK,
+        "timer_preset_2": TIMER_PRESET_MEDIUM,
+        "timer_preset_3": DEFAULT_LONG_BREAK,
+        "timer_preset_4": DEFAULT_POMODORO_DURATION,
+        "short_break_minutes": DEFAULT_SHORT_BREAK,
+        "long_break_minutes": DEFAULT_LONG_BREAK,
+        "pomodoros_until_long_break": DEFAULT_POMODOROS_UNTIL_LONG_BREAK,
         "always_use_short_break": False,
         "sound_enabled": True,
         "notifications_enabled": True,
@@ -861,7 +884,7 @@ def get_settings():
         "working_hours_end": "17:00",
         "clock_format": "auto",
         "period_labels": "auto",
-        "daily_minutes_goal": 300,
+        "daily_minutes_goal": DEFAULT_DAILY_GOAL,
     }
 
     # Always read from SQLite (fast local cache)
@@ -913,7 +936,6 @@ def _parse_iso_date_range(start_iso, end_iso):
 
 def _calculate_period_date_range(period, ref_date):
     """Calculate date range for a given period (day, week, month)."""
-    december = 12
     if period == "day":
         start = ref_date.replace(hour=0, minute=0, second=0, microsecond=0)
         end = start + timedelta(days=1)
@@ -925,7 +947,7 @@ def _calculate_period_date_range(period, ref_date):
         dates = [start + timedelta(days=i) for i in range(7)]
     elif period == "month":
         start = ref_date.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        if ref_date.month == december:
+        if ref_date.month == MONTHS_IN_YEAR:
             end = start.replace(year=ref_date.year + 1, month=1)
         else:
             end = start.replace(month=ref_date.month + 1)
@@ -977,7 +999,7 @@ def get_report(period):
         ref_date = datetime.strptime(date_str, "%Y-%m-%d")
         dates, start_iso, end_iso = _calculate_period_date_range(period, ref_date)
         if dates is None:
-            return jsonify({"error": "Invalid period"}), 400
+            return jsonify({"error": "Invalid period"}), HTTPStatus.BAD_REQUEST
 
     db = get_db()
     rows = db.execute(
@@ -1066,7 +1088,7 @@ def get_sync_status():
 def check_sync_sources():
     """Check data counts from both local SQLite and Google Sheets."""
     if not use_google_sheets():
-        return jsonify({"error": "Not logged in to Google"}), 401
+        return jsonify({"error": "Not logged in to Google"}), HTTPStatus.UNAUTHORIZED
 
     # Get user's local count (per-user database)
     db = get_db()
@@ -1089,7 +1111,7 @@ def check_sync_sources():
         sheets_pomodoros = sheets_storage.get_pomodoros(service, session["spreadsheet_id"])
         sheets_count = len(sheets_pomodoros)
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": str(e)}), HTTPStatus.INTERNAL_SERVER_ERROR
 
     return jsonify(
         {
@@ -1105,7 +1127,7 @@ def check_sync_sources():
 def trigger_sync():
     """Manually trigger a sync with Google Sheets."""
     if not use_google_sheets():
-        return jsonify({"error": "Not logged in to Google"}), 401
+        return jsonify({"error": "Not logged in to Google"}), HTTPStatus.UNAUTHORIZED
 
     db_path = get_user_db_path()
 
@@ -1113,7 +1135,7 @@ def trigger_sync():
     try:
         count = sync_from_sheets(db_path, session["credentials"], session["spreadsheet_id"])
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": str(e)}), HTTPStatus.INTERNAL_SERVER_ERROR
 
     # Then push any pending changes
     start_background_sync(db_path, session["credentials"], session["spreadsheet_id"])
@@ -1218,13 +1240,13 @@ def _migrate_settings(db, service, spreadsheet_id, direction):
 
     if direction == "sheets_to_local":
         defaults = {
-            "timer_preset_1": 5,
-            "timer_preset_2": 10,
-            "timer_preset_3": 15,
-            "timer_preset_4": 25,
-            "short_break_minutes": 5,
-            "long_break_minutes": 15,
-            "pomodoros_until_long_break": 4,
+            "timer_preset_1": DEFAULT_SHORT_BREAK,
+            "timer_preset_2": TIMER_PRESET_MEDIUM,
+            "timer_preset_3": DEFAULT_LONG_BREAK,
+            "timer_preset_4": DEFAULT_POMODORO_DURATION,
+            "short_break_minutes": DEFAULT_SHORT_BREAK,
+            "long_break_minutes": DEFAULT_LONG_BREAK,
+            "pomodoros_until_long_break": DEFAULT_POMODOROS_UNTIL_LONG_BREAK,
             "always_use_short_break": False,
             "sound_enabled": True,
             "notifications_enabled": True,
@@ -1238,7 +1260,7 @@ def _migrate_settings(db, service, spreadsheet_id, direction):
             "working_hours_end": "17:00",
             "clock_format": "auto",
             "period_labels": "auto",
-            "daily_minutes_goal": 300,
+            "daily_minutes_goal": DEFAULT_DAILY_GOAL,
         }
         sheets_settings = sheets_storage.get_settings(service, spreadsheet_id, defaults)
         for key, value in sheets_settings.items():
@@ -1255,7 +1277,7 @@ def _migrate_settings(db, service, spreadsheet_id, direction):
 def migrate_data():
     """Migrate data between SQLite and Google Sheets."""
     if not use_google_sheets():
-        return jsonify({"error": "Not logged in to Google"}), 401
+        return jsonify({"error": "Not logged in to Google"}), HTTPStatus.UNAUTHORIZED
 
     data = request.json or {}
     pomodoros_direction = data.get("pomodoros_direction", "skip")
@@ -1290,4 +1312,4 @@ def migrate_data():
 
 if __name__ == "__main__":
     host = os.environ.get("FLASK_HOST", "127.0.0.1")
-    app.run(host=host, port=5000)
+    app.run(host=host, port=DEFAULT_PORT)
