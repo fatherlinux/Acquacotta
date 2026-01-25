@@ -246,7 +246,13 @@ def queue_sync_operation(db_path, operation, table_name, record_id, record_data=
         INSERT INTO sync_queue (operation, table_name, record_id, data, created_at)
         VALUES (?, ?, ?, ?, ?)
         """,
-        (operation, table_name, record_id, json.dumps(record_data) if record_data else None, datetime.utcnow().isoformat()),
+        (
+            operation,
+            table_name,
+            record_id,
+            json.dumps(record_data) if record_data else None,
+            datetime.utcnow().isoformat(),
+        ),
     )
     db.commit()
     db.close()
