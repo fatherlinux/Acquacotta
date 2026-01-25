@@ -953,11 +953,13 @@ def _calculate_report_stats(pomodoros, dates):
     for d in dates:
         day_str = d.strftime("%Y-%m-%d")
         day_pomodoros = [p for p in pomodoros if p["start_time"].startswith(day_str)]
-        daily_totals.append({
-            "date": day_str,
-            "minutes": sum(p["duration_minutes"] for p in day_pomodoros),
-            "count": len(day_pomodoros),
-        })
+        daily_totals.append(
+            {
+                "date": day_str,
+                "minutes": sum(p["duration_minutes"] for p in day_pomodoros),
+                "count": len(day_pomodoros),
+            }
+        )
 
     return total_minutes, total_count, by_type, daily_totals
 
@@ -987,13 +989,15 @@ def get_report(period):
 
     total_minutes, total_count, by_type, daily_totals = _calculate_report_stats(pomodoros, dates)
 
-    return jsonify({
-        "period": period,
-        "total_minutes": total_minutes,
-        "total_pomodoros": total_count,
-        "by_type": by_type,
-        "daily_totals": daily_totals,
-    })
+    return jsonify(
+        {
+            "period": period,
+            "total_minutes": total_minutes,
+            "total_pomodoros": total_count,
+            "by_type": by_type,
+            "daily_totals": daily_totals,
+        }
+    )
 
 
 @app.route("/api/export")
@@ -1214,17 +1218,33 @@ def _migrate_settings(db, service, spreadsheet_id, direction):
 
     if direction == "sheets_to_local":
         defaults = {
-            "timer_preset_1": 5, "timer_preset_2": 10, "timer_preset_3": 15, "timer_preset_4": 25,
-            "short_break_minutes": 5, "long_break_minutes": 15, "pomodoros_until_long_break": 4,
-            "always_use_short_break": False, "sound_enabled": True, "notifications_enabled": True,
-            "pomodoro_types": DEFAULT_POMODORO_TYPES, "auto_start_after_break": False,
-            "tick_sound_during_breaks": False, "bell_at_pomodoro_end": True, "bell_at_break_end": True,
-            "show_notes_field": False, "working_hours_start": "08:00", "working_hours_end": "17:00",
-            "clock_format": "auto", "period_labels": "auto", "daily_minutes_goal": 300,
+            "timer_preset_1": 5,
+            "timer_preset_2": 10,
+            "timer_preset_3": 15,
+            "timer_preset_4": 25,
+            "short_break_minutes": 5,
+            "long_break_minutes": 15,
+            "pomodoros_until_long_break": 4,
+            "always_use_short_break": False,
+            "sound_enabled": True,
+            "notifications_enabled": True,
+            "pomodoro_types": DEFAULT_POMODORO_TYPES,
+            "auto_start_after_break": False,
+            "tick_sound_during_breaks": False,
+            "bell_at_pomodoro_end": True,
+            "bell_at_break_end": True,
+            "show_notes_field": False,
+            "working_hours_start": "08:00",
+            "working_hours_end": "17:00",
+            "clock_format": "auto",
+            "period_labels": "auto",
+            "daily_minutes_goal": 300,
         }
         sheets_settings = sheets_storage.get_settings(service, spreadsheet_id, defaults)
         for key, value in sheets_settings.items():
-            db.execute("INSERT OR REPLACE INTO settings (key, value, synced) VALUES (?, ?, 1)", (key, json.dumps(value)))
+            db.execute(
+                "INSERT OR REPLACE INTO settings (key, value, synced) VALUES (?, ?, 1)", (key, json.dumps(value))
+            )
         db.commit()
         return len(sheets_settings)
 
@@ -1256,14 +1276,16 @@ def migrate_data():
     settings_migrated = _migrate_settings(db, service, spreadsheet_id, settings_direction)
     session["needs_initial_sync"] = False
 
-    return jsonify({
-        "success": True,
-        "pomodoros_migrated": migrated_pomodoros,
-        "pomodoros_skipped": skipped_pomodoros,
-        "pomodoros_direction": pomodoros_direction,
-        "settings_migrated": settings_migrated,
-        "settings_direction": settings_direction,
-    })
+    return jsonify(
+        {
+            "success": True,
+            "pomodoros_migrated": migrated_pomodoros,
+            "pomodoros_skipped": skipped_pomodoros,
+            "pomodoros_direction": pomodoros_direction,
+            "settings_migrated": settings_migrated,
+            "settings_direction": settings_direction,
+        }
+    )
 
 
 if __name__ == "__main__":
