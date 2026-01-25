@@ -2,6 +2,11 @@
 
 import json
 
+# Column counts for Sheets data validation
+POMODORO_MIN_COLUMNS = 6  # id, name, type, start_time, end_time, duration_minutes
+POMODORO_TOTAL_COLUMNS = 7  # includes optional notes column
+SETTINGS_MIN_COLUMNS = 2  # key, value
+
 
 def get_pomodoros(sheets_service, spreadsheet_id, start_date=None, end_date=None):
     """Get pomodoros from Google Sheets."""
@@ -19,7 +24,7 @@ def get_pomodoros(sheets_service, spreadsheet_id, start_date=None, end_date=None
     pomodoros = []
 
     for row in rows:
-        if len(row) < 6:
+        if len(row) < POMODORO_MIN_COLUMNS:
             continue
         pomo = {
             "id": row[0],
@@ -28,7 +33,7 @@ def get_pomodoros(sheets_service, spreadsheet_id, start_date=None, end_date=None
             "start_time": row[3],
             "end_time": row[4],
             "duration_minutes": int(row[5]),
-            "notes": row[6] if len(row) > 6 else None,
+            "notes": row[6] if len(row) > POMODORO_MIN_COLUMNS else None,
         }
 
         # Filter by date if specified
@@ -130,7 +135,7 @@ def update_pomodoro(sheets_service, spreadsheet_id, pomodoro_id, data):
     )
 
     current_values = current.get("values", [[]])[0]
-    while len(current_values) < 7:
+    while len(current_values) < POMODORO_TOTAL_COLUMNS:
         current_values.append("")
 
     # Update fields
@@ -224,7 +229,7 @@ def get_settings(sheets_service, spreadsheet_id, defaults):
     settings = dict(defaults)
 
     for row in rows:
-        if len(row) >= 2:
+        if len(row) >= SETTINGS_MIN_COLUMNS:
             key = row[0]
             try:
                 value = json.loads(row[1])

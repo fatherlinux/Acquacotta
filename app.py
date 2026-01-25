@@ -215,6 +215,32 @@ def queue_sync_operation(db_path, operation, table_name, record_id, data=None):
     db.close()
 
 
+def _create_sheets_credentials(credentials_dict):
+    """Create Google Sheets credentials from dict."""
+    return Credentials(
+        token=credentials_dict["token"],
+        refresh_token=credentials_dict.get("refresh_token"),
+        token_uri=credentials_dict["token_uri"],
+        client_id=credentials_dict["client_id"],
+        client_secret=credentials_dict["client_secret"],
+        scopes=credentials_dict["scopes"],
+    )
+
+
+def _execute_sync_operation(service, spreadsheet_id, sync_op):
+    """Execute a single sync operation against Google Sheets."""
+    table_name, operation, record_id, data = sync_op["table"], sync_op["op"], sync_op["id"], sync_op["data"]
+    if table_name == "pomodoros":
+        if operation == "INSERT":
+            sheets_storage.save_pomodoro(service, spreadsheet_id, data)
+        elif operation == "UPDATE":
+            sheets_storage.update_pomodoro(service, spreadsheet_id, record_id, data)
+        elif operation == "DELETE":
+            sheets_storage.delete_pomodoro(service, spreadsheet_id, record_id)
+    elif table_name == "settings" and operation in ("INSERT", "UPDATE"):
+        sheets_storage.save_settings(service, spreadsheet_id, data)
+
+
 def process_sync_queue(db_path, credentials_dict, spreadsheet_id):
     """Process pending sync operations in background."""
     global sync_in_progress, last_sync_error
@@ -225,50 +251,28 @@ def process_sync_queue(db_path, credentials_dict, spreadsheet_id):
         sync_in_progress = True
 
     try:
-        credentials = Credentials(
-            token=credentials_dict["token"],
-            refresh_token=credentials_dict.get("refresh_token"),
-            token_uri=credentials_dict["token_uri"],
-            client_id=credentials_dict["client_id"],
-            client_secret=credentials_dict["client_secret"],
-            scopes=credentials_dict["scopes"],
-        )
+        credentials = _create_sheets_credentials(credentials_dict)
         service = build("sheets", "v4", credentials=credentials)
 
         db = sqlite3.connect(db_path)
         db.row_factory = sqlite3.Row
-
-        # Process queued operations
         rows = db.execute("SELECT * FROM sync_queue ORDER BY created_at").fetchall()
 
         for row in rows:
             try:
-                operation = row["operation"]
-                table_name = row["table_name"]
-                record_id = row["record_id"]
-                data = json.loads(row["data"]) if row["data"] else None
-
-                if table_name == "pomodoros":
-                    if operation == "INSERT":
-                        sheets_storage.save_pomodoro(service, spreadsheet_id, data)
-                    elif operation == "UPDATE":
-                        sheets_storage.update_pomodoro(service, spreadsheet_id, record_id, data)
-                    elif operation == "DELETE":
-                        sheets_storage.delete_pomodoro(service, spreadsheet_id, record_id)
-                elif table_name == "settings":
-                    if operation in ("INSERT", "UPDATE"):
-                        sheets_storage.save_settings(service, spreadsheet_id, data)
-
-                # Mark as synced and remove from queue
-                db.execute("UPDATE pomodoros SET synced = 1 WHERE id = ?", (record_id,))
+                sync_op = {
+                    "table": row["table_name"],
+                    "op": row["operation"],
+                    "id": row["record_id"],
+                    "data": json.loads(row["data"]) if row["data"] else None,
+                }
+                _execute_sync_operation(service, spreadsheet_id, sync_op)
+                db.execute("UPDATE pomodoros SET synced = 1 WHERE id = ?", (row["record_id"],))
                 db.execute("DELETE FROM sync_queue WHERE id = ?", (row["id"],))
                 db.commit()
-
             except Exception as e:
                 last_sync_error = str(e)
-                # Don't remove from queue on error - will retry later
 
-        # Update last sync time
         db.execute(
             "INSERT OR REPLACE INTO sync_status (key, value) VALUES (?, ?)",
             ("last_sync", datetime.utcnow().isoformat()),
@@ -891,85 +895,60 @@ def save_settings():
     return jsonify({"status": "ok"})
 
 
-@app.route("/api/reports/<period>")
-def get_report(period):
-    """Get report data for a given period (day, week, month).
+def _parse_iso_date_range(start_iso, end_iso):
+    """Parse ISO date strings and build dates list."""
+    start_dt = datetime.fromisoformat(start_iso.replace("Z", "+00:00"))
+    end_dt = datetime.fromisoformat(end_iso.replace("Z", "+00:00"))
 
-    Accepts start_date and end_date as ISO strings for timezone-aware queries.
-    Falls back to date parameter (interpreted as UTC) if ISO strings not provided.
-    """
-    # Use ISO date strings if provided (timezone-aware from frontend)
-    start_iso = request.args.get("start_date")
-    end_iso = request.args.get("end_date")
+    dates = []
+    d = start_dt.replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=None)
+    end_naive = end_dt.replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=None)
+    while d < end_naive:
+        dates.append(d)
+        d += timedelta(days=1)
+    if not dates:
+        dates = [start_dt.replace(tzinfo=None)]
+    return dates, start_iso, end_iso
 
-    if start_iso and end_iso:
-        # Parse ISO dates to get the reference date and date list
-        start_dt = datetime.fromisoformat(start_iso.replace("Z", "+00:00"))
-        end_dt = datetime.fromisoformat(end_iso.replace("Z", "+00:00"))
 
-        # Build dates list for daily_totals
+def _calculate_period_date_range(period, ref_date):
+    """Calculate date range for a given period (day, week, month)."""
+    december = 12
+    if period == "day":
+        start = ref_date.replace(hour=0, minute=0, second=0, microsecond=0)
+        end = start + timedelta(days=1)
+        dates = [start]
+    elif period == "week":
+        start = ref_date - timedelta(days=ref_date.weekday())
+        start = start.replace(hour=0, minute=0, second=0, microsecond=0)
+        end = start + timedelta(days=7)
+        dates = [start + timedelta(days=i) for i in range(7)]
+    elif period == "month":
+        start = ref_date.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        if ref_date.month == december:
+            end = start.replace(year=ref_date.year + 1, month=1)
+        else:
+            end = start.replace(month=ref_date.month + 1)
         dates = []
-        d = start_dt.replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=None)
-        end_naive = end_dt.replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=None)
-        while d < end_naive:
+        d = start
+        while d < end:
             dates.append(d)
             d += timedelta(days=1)
-        if not dates:
-            dates = [start_dt.replace(tzinfo=None)]
     else:
-        # Fallback to date parameter (legacy behavior)
-        date_str = request.args.get("date", datetime.utcnow().strftime("%Y-%m-%d"))
-        ref_date = datetime.strptime(date_str, "%Y-%m-%d")
+        return None, None, None
+    return dates, start.isoformat() + "Z", end.isoformat() + "Z"
 
-        if period == "day":
-            start = ref_date.replace(hour=0, minute=0, second=0, microsecond=0)
-            end = start + timedelta(days=1)
-            dates = [start]
-        elif period == "week":
-            start = ref_date - timedelta(days=ref_date.weekday())
-            start = start.replace(hour=0, minute=0, second=0, microsecond=0)
-            end = start + timedelta(days=7)
-            dates = [start + timedelta(days=i) for i in range(7)]
-        elif period == "month":
-            start = ref_date.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-            if ref_date.month == 12:
-                end = start.replace(year=ref_date.year + 1, month=1)
-            else:
-                end = start.replace(month=ref_date.month + 1)
-            dates = []
-            d = start
-            while d < end:
-                dates.append(d)
-                d += timedelta(days=1)
-        else:
-            return jsonify({"error": "Invalid period"}), 400
 
-        start_iso = start.isoformat() + "Z"
-        end_iso = end.isoformat() + "Z"
-
-    # Always read from SQLite (fast local cache)
-    db = get_db()
-    rows = db.execute(
-        """
-        SELECT id, name, type, start_time, end_time, duration_minutes, notes FROM pomodoros
-        WHERE start_time >= ? AND start_time < ?
-        ORDER BY start_time
-        """,
-        (start_iso, end_iso),
-    ).fetchall()
-    pomodoros = [dict(row) for row in rows]
-
-    # Calculate totals
+def _calculate_report_stats(pomodoros, dates):
+    """Calculate report statistics from pomodoros."""
     total_minutes = sum(p["duration_minutes"] for p in pomodoros)
     total_count = len(pomodoros)
 
-    # By type
     by_type = {}
     for p in pomodoros:
         t = p["type"]
         by_type[t] = by_type.get(t, 0) + p["duration_minutes"]
 
-    # Daily totals
     daily_totals = []
     for d in dates:
         day_str = d.strftime("%Y-%m-%d")
@@ -981,6 +960,34 @@ def get_report(period):
                 "count": len(day_pomodoros),
             }
         )
+
+    return total_minutes, total_count, by_type, daily_totals
+
+
+@app.route("/api/reports/<period>")
+def get_report(period):
+    """Get report data for a given period (day, week, month)."""
+    start_iso = request.args.get("start_date")
+    end_iso = request.args.get("end_date")
+
+    if start_iso and end_iso:
+        dates, start_iso, end_iso = _parse_iso_date_range(start_iso, end_iso)
+    else:
+        date_str = request.args.get("date", datetime.utcnow().strftime("%Y-%m-%d"))
+        ref_date = datetime.strptime(date_str, "%Y-%m-%d")
+        dates, start_iso, end_iso = _calculate_period_date_range(period, ref_date)
+        if dates is None:
+            return jsonify({"error": "Invalid period"}), 400
+
+    db = get_db()
+    rows = db.execute(
+        """SELECT id, name, type, start_time, end_time, duration_minutes, notes FROM pomodoros
+        WHERE start_time >= ? AND start_time < ? ORDER BY start_time""",
+        (start_iso, end_iso),
+    ).fetchall()
+    pomodoros = [dict(row) for row in rows]
+
+    total_minutes, total_count, by_type, daily_totals = _calculate_report_stats(pomodoros, dates)
 
     return jsonify(
         {
@@ -1114,129 +1121,102 @@ def trigger_sync():
     return jsonify({"status": "ok", "synced_from_sheets": count})
 
 
-@app.route("/api/migrate", methods=["POST"])
-def migrate_data():
-    """Migrate data between SQLite and Google Sheets.
+def _row_to_pomodoro(row):
+    """Convert a database row to a pomodoro dict."""
+    return {
+        "id": row["id"],
+        "name": row["name"],
+        "type": row["type"],
+        "start_time": row["start_time"],
+        "end_time": row["end_time"],
+        "duration_minutes": row["duration_minutes"],
+        "notes": row["notes"],
+    }
 
-    Request body:
-        pomodoros_direction: "local_to_sheets" | "sheets_to_local" | "shared_cache_to_sheets" | "skip"
-        settings_direction: "local_to_sheets" | "sheets_to_local" | "skip"
-    """
-    if not use_google_sheets():
-        return jsonify({"error": "Not logged in to Google"}), 401
 
-    data = request.json or {}
-    pomodoros_direction = data.get("pomodoros_direction", "skip")
-    settings_direction = data.get("settings_direction", "skip")
+def _migrate_shared_cache_to_sheets(service, spreadsheet_id):
+    """Migrate pomodoros from shared cache to Google Sheets."""
+    if not DEFAULT_DB_PATH.exists() or get_user_db_path() == DEFAULT_DB_PATH:
+        return 0, 0
 
-    db = get_db()
-    service = get_sheets_service()
-    spreadsheet_id = session["spreadsheet_id"]
+    shared_db = sqlite3.connect(DEFAULT_DB_PATH)
+    shared_db.row_factory = sqlite3.Row
 
-    migrated_pomodoros = 0
-    skipped_pomodoros = 0
+    existing_ids = {p["id"] for p in sheets_storage.get_pomodoros(service, spreadsheet_id)}
+    rows = shared_db.execute("SELECT * FROM pomodoros ORDER BY start_time").fetchall()
 
-    if pomodoros_direction == "shared_cache_to_sheets":
-        # Push pomodoros from shared cache to Google Sheets
-        if DEFAULT_DB_PATH.exists() and get_user_db_path() != DEFAULT_DB_PATH:
-            shared_db = sqlite3.connect(DEFAULT_DB_PATH)
-            shared_db.row_factory = sqlite3.Row
+    pomodoros_to_upload = []
+    skipped = 0
+    for row in rows:
+        if row["id"] in existing_ids:
+            skipped += 1
+        else:
+            pomodoros_to_upload.append(_row_to_pomodoro(row))
 
-            existing_pomodoros = sheets_storage.get_pomodoros(service, spreadsheet_id)
-            existing_ids = {p["id"] for p in existing_pomodoros}
+    if pomodoros_to_upload:
+        sheets_storage.save_pomodoros_batch(service, spreadsheet_id, pomodoros_to_upload)
 
-            rows = shared_db.execute("SELECT * FROM pomodoros ORDER BY start_time").fetchall()
-            pomodoros_to_upload = []
-            for row in rows:
-                if row["id"] in existing_ids:
-                    skipped_pomodoros += 1
-                    continue
-                pomodoro = {
-                    "id": row["id"],
-                    "name": row["name"],
-                    "type": row["type"],
-                    "start_time": row["start_time"],
-                    "end_time": row["end_time"],
-                    "duration_minutes": row["duration_minutes"],
-                    "notes": row["notes"],
-                }
-                pomodoros_to_upload.append(pomodoro)
+    shared_db.execute("DELETE FROM pomodoros")
+    shared_db.commit()
+    shared_db.close()
+    return len(pomodoros_to_upload), skipped
 
-            if pomodoros_to_upload:
-                sheets_storage.save_pomodoros_batch(service, spreadsheet_id, pomodoros_to_upload)
-                migrated_pomodoros = len(pomodoros_to_upload)
 
-            # Clear the shared cache after successful migration
-            shared_db.execute("DELETE FROM pomodoros")
-            shared_db.commit()
-            shared_db.close()
+def _migrate_local_to_sheets(db, service, spreadsheet_id):
+    """Migrate pomodoros from local SQLite to Google Sheets."""
+    existing_ids = {p["id"] for p in sheets_storage.get_pomodoros(service, spreadsheet_id)}
+    rows = db.execute("SELECT * FROM pomodoros ORDER BY start_time").fetchall()
 
-    elif pomodoros_direction == "local_to_sheets":
-        # Push local pomodoros to Google Sheets
-        existing_pomodoros = sheets_storage.get_pomodoros(service, spreadsheet_id)
-        existing_ids = {p["id"] for p in existing_pomodoros}
-
-        rows = db.execute("SELECT * FROM pomodoros ORDER BY start_time").fetchall()
-        pomodoros_to_upload = []
-        ids_to_mark_synced = []
-        for row in rows:
-            if row["id"] in existing_ids:
-                skipped_pomodoros += 1
-                continue
-            pomodoro = {
-                "id": row["id"],
-                "name": row["name"],
-                "type": row["type"],
-                "start_time": row["start_time"],
-                "end_time": row["end_time"],
-                "duration_minutes": row["duration_minutes"],
-                "notes": row["notes"],
-            }
-            pomodoros_to_upload.append(pomodoro)
+    pomodoros_to_upload = []
+    ids_to_mark_synced = []
+    skipped = 0
+    for row in rows:
+        if row["id"] in existing_ids:
+            skipped += 1
+        else:
+            pomodoros_to_upload.append(_row_to_pomodoro(row))
             ids_to_mark_synced.append(row["id"])
 
-        # Upload all pomodoros in a single batch request to avoid rate limits
-        if pomodoros_to_upload:
-            sheets_storage.save_pomodoros_batch(service, spreadsheet_id, pomodoros_to_upload)
-            # Mark all as synced in local db
-            for pomodoro_id in ids_to_mark_synced:
-                db.execute("UPDATE pomodoros SET synced = 1 WHERE id = ?", (pomodoro_id,))
-            migrated_pomodoros = len(pomodoros_to_upload)
-        db.commit()
+    if pomodoros_to_upload:
+        sheets_storage.save_pomodoros_batch(service, spreadsheet_id, pomodoros_to_upload)
+        for pomodoro_id in ids_to_mark_synced:
+            db.execute("UPDATE pomodoros SET synced = 1 WHERE id = ?", (pomodoro_id,))
+    db.commit()
+    return len(pomodoros_to_upload), skipped
 
-    elif pomodoros_direction == "sheets_to_local":
-        # Pull pomodoros from Google Sheets to local SQLite
-        sheets_pomodoros = sheets_storage.get_pomodoros(service, spreadsheet_id)
 
-        # Get existing local IDs to avoid duplicates
-        local_rows = db.execute("SELECT id FROM pomodoros").fetchall()
-        local_ids = {row["id"] for row in local_rows}
+def _migrate_sheets_to_local(db, service, spreadsheet_id):
+    """Migrate pomodoros from Google Sheets to local SQLite."""
+    sheets_pomodoros = sheets_storage.get_pomodoros(service, spreadsheet_id)
+    local_ids = {row["id"] for row in db.execute("SELECT id FROM pomodoros").fetchall()}
 
-        for p in sheets_pomodoros:
-            if p["id"] in local_ids:
-                skipped_pomodoros += 1
-                continue
+    migrated = 0
+    skipped = 0
+    for p in sheets_pomodoros:
+        if p["id"] in local_ids:
+            skipped += 1
+        else:
             db.execute(
-                """
-                INSERT INTO pomodoros (id, name, type, start_time, end_time, duration_minutes, notes, synced)
-                VALUES (?, ?, ?, ?, ?, ?, ?, 1)
-                """,
+                """INSERT INTO pomodoros (id, name, type, start_time, end_time, duration_minutes, notes, synced)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 1)""",
                 (p["id"], p["name"], p["type"], p["start_time"], p["end_time"], p["duration_minutes"], p.get("notes")),
             )
-            migrated_pomodoros += 1
-        db.commit()
+            migrated += 1
+    db.commit()
+    return migrated, skipped
 
-    # Handle settings based on direction
-    settings_migrated = 0
-    if settings_direction == "local_to_sheets":
-        # Push local settings to Google Sheets
+
+def _migrate_settings(db, service, spreadsheet_id, direction):
+    """Migrate settings between local SQLite and Google Sheets."""
+    if direction == "local_to_sheets":
         settings_rows = db.execute("SELECT key, value FROM settings").fetchall()
         if settings_rows:
             settings_data = {row["key"]: json.loads(row["value"]) for row in settings_rows}
             sheets_storage.save_settings(service, spreadsheet_id, settings_data)
-            settings_migrated = len(settings_rows)
-    elif settings_direction == "sheets_to_local":
-        # Pull Google Sheets settings to local
+            return len(settings_rows)
+        return 0
+
+    if direction == "sheets_to_local":
         defaults = {
             "timer_preset_1": 5,
             "timer_preset_2": 10,
@@ -1263,13 +1243,37 @@ def migrate_data():
         sheets_settings = sheets_storage.get_settings(service, spreadsheet_id, defaults)
         for key, value in sheets_settings.items():
             db.execute(
-                "INSERT OR REPLACE INTO settings (key, value, synced) VALUES (?, ?, 1)",
-                (key, json.dumps(value)),
+                "INSERT OR REPLACE INTO settings (key, value, synced) VALUES (?, ?, 1)", (key, json.dumps(value))
             )
         db.commit()
-        settings_migrated = len(sheets_settings)
+        return len(sheets_settings)
 
-    # Clear the needs_initial_sync flag - migration is complete
+    return 0
+
+
+@app.route("/api/migrate", methods=["POST"])
+def migrate_data():
+    """Migrate data between SQLite and Google Sheets."""
+    if not use_google_sheets():
+        return jsonify({"error": "Not logged in to Google"}), 401
+
+    data = request.json or {}
+    pomodoros_direction = data.get("pomodoros_direction", "skip")
+    settings_direction = data.get("settings_direction", "skip")
+
+    db = get_db()
+    service = get_sheets_service()
+    spreadsheet_id = session["spreadsheet_id"]
+
+    migrated_pomodoros, skipped_pomodoros = 0, 0
+    if pomodoros_direction == "shared_cache_to_sheets":
+        migrated_pomodoros, skipped_pomodoros = _migrate_shared_cache_to_sheets(service, spreadsheet_id)
+    elif pomodoros_direction == "local_to_sheets":
+        migrated_pomodoros, skipped_pomodoros = _migrate_local_to_sheets(db, service, spreadsheet_id)
+    elif pomodoros_direction == "sheets_to_local":
+        migrated_pomodoros, skipped_pomodoros = _migrate_sheets_to_local(db, service, spreadsheet_id)
+
+    settings_migrated = _migrate_settings(db, service, spreadsheet_id, settings_direction)
     session["needs_initial_sync"] = False
 
     return jsonify(
