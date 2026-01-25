@@ -224,7 +224,7 @@ def init_db(db_path=None):
 init_db(DEFAULT_DB_PATH)
 
 
-def queue_sync_operation(db_path, operation, table_name, record_id, data=None):
+def queue_sync_operation(db_path, operation, table_name, record_id, record_data=None):
     """Queue an operation for background sync to Google Sheets."""
     db = sqlite3.connect(db_path)
     db.execute(
@@ -232,7 +232,7 @@ def queue_sync_operation(db_path, operation, table_name, record_id, data=None):
         INSERT INTO sync_queue (operation, table_name, record_id, data, created_at)
         VALUES (?, ?, ?, ?, ?)
         """,
-        (operation, table_name, record_id, json.dumps(data) if data else None, datetime.utcnow().isoformat()),
+        (operation, table_name, record_id, json.dumps(record_data) if record_data else None, datetime.utcnow().isoformat()),
     )
     db.commit()
     db.close()
@@ -252,16 +252,16 @@ def _create_sheets_credentials(credentials_dict):
 
 def _execute_sync_operation(service, spreadsheet_id, sync_op):
     """Execute a single sync operation against Google Sheets."""
-    table_name, operation, record_id, data = sync_op["table"], sync_op["op"], sync_op["id"], sync_op["data"]
+    table_name, operation, record_id, record_data = sync_op["table"], sync_op["op"], sync_op["id"], sync_op["data"]
     if table_name == "pomodoros":
         if operation == "INSERT":
-            sheets_storage.save_pomodoro(service, spreadsheet_id, data)
+            sheets_storage.save_pomodoro(service, spreadsheet_id, record_data)
         elif operation == "UPDATE":
-            sheets_storage.update_pomodoro(service, spreadsheet_id, record_id, data)
+            sheets_storage.update_pomodoro(service, spreadsheet_id, record_id, record_data)
         elif operation == "DELETE":
             sheets_storage.delete_pomodoro(service, spreadsheet_id, record_id)
     elif table_name == "settings" and operation in ("INSERT", "UPDATE"):
-        sheets_storage.save_settings(service, spreadsheet_id, data)
+        sheets_storage.save_settings(service, spreadsheet_id, record_data)
 
 
 def process_sync_queue(db_path, credentials_dict, spreadsheet_id):
@@ -659,8 +659,8 @@ def update_spreadsheet():
     if "user_email" not in session:
         return jsonify({"error": "Not logged in"}), HTTPStatus.UNAUTHORIZED
 
-    data = request.get_json()
-    new_spreadsheet_id = data.get("spreadsheet_id", "").strip()
+    request_json = request.get_json()
+    new_spreadsheet_id = request_json.get("spreadsheet_id", "").strip()
 
     if not new_spreadsheet_id:
         return jsonify({"error": "Spreadsheet ID is required"}), HTTPStatus.BAD_REQUEST
@@ -717,21 +717,21 @@ def get_pomodoros():
 @app.route("/api/pomodoros", methods=["POST"])
 def create_pomodoro():
     """Create a new pomodoro."""
-    data = request.json
+    pomodoro_input = request.json
 
     pomodoro_id = str(uuid.uuid4())
     end_time = datetime.utcnow()
-    duration = data.get("duration_minutes", DEFAULT_POMODORO_DURATION)
+    duration = pomodoro_input.get("duration_minutes", DEFAULT_POMODORO_DURATION)
     start_time = end_time - timedelta(minutes=duration)
 
     pomodoro = {
         "id": pomodoro_id,
-        "name": data.get("name") or "",
-        "type": data["type"],
+        "name": pomodoro_input.get("name") or "",
+        "type": pomodoro_input["type"],
         "start_time": start_time.isoformat() + "Z",
         "end_time": end_time.isoformat() + "Z",
         "duration_minutes": duration,
-        "notes": data.get("notes"),
+        "notes": pomodoro_input.get("notes"),
     }
 
     # Always write to SQLite first (fast)
@@ -743,12 +743,12 @@ def create_pomodoro():
         """,
         (
             pomodoro_id,
-            data.get("name") or "",
-            data["type"],
+            pomodoro_input.get("name") or "",
+            pomodoro_input["type"],
             start_time.isoformat() + "Z",
             end_time.isoformat() + "Z",
             duration,
-            data.get("notes"),
+            pomodoro_input.get("notes"),
             0 if use_google_sheets() else 1,  # Mark as unsynced if Google connected
         ),
     )
@@ -766,7 +766,7 @@ def create_pomodoro():
 @app.route("/api/pomodoros/<pomodoro_id>", methods=["PUT"])
 def update_pomodoro(pomodoro_id):
     """Update an existing pomodoro."""
-    data = request.json
+    update_fields = request.json
 
     # Always update SQLite first (fast)
     db = get_db()
@@ -777,12 +777,12 @@ def update_pomodoro(pomodoro_id):
         WHERE id = ?
         """,
         (
-            data["name"],
-            data["type"],
-            data.get("notes"),
-            data["start_time"],
-            data["end_time"],
-            data["duration_minutes"],
+            update_fields["name"],
+            update_fields["type"],
+            update_fields.get("notes"),
+            update_fields["start_time"],
+            update_fields["end_time"],
+            update_fields["duration_minutes"],
             0 if use_google_sheets() else 1,
             pomodoro_id,
         ),
@@ -792,7 +792,7 @@ def update_pomodoro(pomodoro_id):
     # Queue for background sync to Google Sheets
     if use_google_sheets():
         db_path = get_user_db_path()
-        queue_sync_operation(db_path, "UPDATE", "pomodoros", pomodoro_id, data)
+        queue_sync_operation(db_path, "UPDATE", "pomodoros", pomodoro_id, update_fields)
         start_background_sync(db_path, session["credentials"], session["spreadsheet_id"])
 
     return jsonify({"status": "ok"})
@@ -818,17 +818,17 @@ def delete_pomodoro(pomodoro_id):
 @app.route("/api/pomodoros/manual", methods=["POST"])
 def create_manual_pomodoro():
     """Create a manual pomodoro with custom times."""
-    data = request.json
+    pomodoro_input = request.json
     pomodoro_id = str(uuid.uuid4())
 
     pomodoro = {
         "id": pomodoro_id,
-        "name": data.get("name") or "",
-        "type": data["type"],
-        "start_time": data["start_time"],
-        "end_time": data["end_time"],
-        "duration_minutes": data["duration_minutes"],
-        "notes": data.get("notes"),
+        "name": pomodoro_input.get("name") or "",
+        "type": pomodoro_input["type"],
+        "start_time": pomodoro_input["start_time"],
+        "end_time": pomodoro_input["end_time"],
+        "duration_minutes": pomodoro_input["duration_minutes"],
+        "notes": pomodoro_input.get("notes"),
     }
 
     # Always write to SQLite first (fast)
@@ -840,12 +840,12 @@ def create_manual_pomodoro():
         """,
         (
             pomodoro_id,
-            data.get("name") or "",
-            data["type"],
-            data["start_time"],
-            data["end_time"],
-            data["duration_minutes"],
-            data.get("notes"),
+            pomodoro_input.get("name") or "",
+            pomodoro_input["type"],
+            pomodoro_input["start_time"],
+            pomodoro_input["end_time"],
+            pomodoro_input["duration_minutes"],
+            pomodoro_input.get("notes"),
             0 if use_google_sheets() else 1,
         ),
     )
@@ -898,11 +898,11 @@ def get_settings():
 @app.route("/api/settings", methods=["POST"])
 def save_settings():
     """Save user settings."""
-    data = request.json
+    settings_input = request.json
 
     # Always write to SQLite first (fast)
     db = get_db()
-    for key, value in data.items():
+    for key, value in settings_input.items():
         db.execute(
             "INSERT OR REPLACE INTO settings (key, value, synced) VALUES (?, ?, ?)",
             (key, json.dumps(value), 0 if use_google_sheets() else 1),
@@ -912,7 +912,7 @@ def save_settings():
     # Queue for background sync to Google Sheets
     if use_google_sheets():
         db_path = get_user_db_path()
-        queue_sync_operation(db_path, "UPDATE", "settings", "all", data)
+        queue_sync_operation(db_path, "UPDATE", "settings", "all", settings_input)
         start_background_sync(db_path, session["credentials"], session["spreadsheet_id"])
 
     return jsonify({"status": "ok"})
@@ -1279,9 +1279,9 @@ def migrate_data():
     if not use_google_sheets():
         return jsonify({"error": "Not logged in to Google"}), HTTPStatus.UNAUTHORIZED
 
-    data = request.json or {}
-    pomodoros_direction = data.get("pomodoros_direction", "skip")
-    settings_direction = data.get("settings_direction", "skip")
+    migration_options = request.json or {}
+    pomodoros_direction = migration_options.get("pomodoros_direction", "skip")
+    settings_direction = migration_options.get("settings_direction", "skip")
 
     db = get_db()
     service = get_sheets_service()

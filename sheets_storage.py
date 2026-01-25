@@ -10,7 +10,7 @@ SETTINGS_MIN_COLUMNS = 2  # key, value
 
 def get_pomodoros(sheets_service, spreadsheet_id, start_date=None, end_date=None):
     """Get pomodoros from Google Sheets."""
-    result = (
+    sheets_response = (
         sheets_service.spreadsheets()
         .values()
         .get(
@@ -20,7 +20,7 @@ def get_pomodoros(sheets_service, spreadsheet_id, start_date=None, end_date=None
         .execute()
     )
 
-    rows = result.get("values", [])
+    rows = sheets_response.get("values", [])
     pomodoros = []
 
     for row in rows:
@@ -100,10 +100,10 @@ def save_pomodoros_batch(sheets_service, spreadsheet_id, pomodoros):
     ).execute()
 
 
-def update_pomodoro(sheets_service, spreadsheet_id, pomodoro_id, data):
+def update_pomodoro(sheets_service, spreadsheet_id, pomodoro_id, update_fields):
     """Update a pomodoro in Google Sheets."""
     # Find the row with this ID
-    result = (
+    id_lookup = (
         sheets_service.spreadsheets()
         .values()
         .get(
@@ -113,7 +113,7 @@ def update_pomodoro(sheets_service, spreadsheet_id, pomodoro_id, data):
         .execute()
     )
 
-    rows = result.get("values", [])
+    rows = id_lookup.get("values", [])
     row_index = None
     for i, row in enumerate(rows):
         if row and row[0] == pomodoro_id:
@@ -124,7 +124,7 @@ def update_pomodoro(sheets_service, spreadsheet_id, pomodoro_id, data):
         return False
 
     # Get current row data
-    current = (
+    current_row = (
         sheets_service.spreadsheets()
         .values()
         .get(
@@ -134,17 +134,17 @@ def update_pomodoro(sheets_service, spreadsheet_id, pomodoro_id, data):
         .execute()
     )
 
-    current_values = current.get("values", [[]])[0]
+    current_values = current_row.get("values", [[]])[0]
     while len(current_values) < POMODORO_TOTAL_COLUMNS:
         current_values.append("")
 
     # Update fields
-    current_values[1] = data.get("name", current_values[1])
-    current_values[2] = data.get("type", current_values[2])
-    current_values[3] = data.get("start_time", current_values[3])
-    current_values[4] = data.get("end_time", current_values[4])
-    current_values[5] = data.get("duration_minutes", current_values[5])
-    current_values[6] = data.get("notes") or ""
+    current_values[1] = update_fields.get("name", current_values[1])
+    current_values[2] = update_fields.get("type", current_values[2])
+    current_values[3] = update_fields.get("start_time", current_values[3])
+    current_values[4] = update_fields.get("end_time", current_values[4])
+    current_values[5] = update_fields.get("duration_minutes", current_values[5])
+    current_values[6] = update_fields.get("notes") or ""
 
     sheets_service.spreadsheets().values().update(
         spreadsheetId=spreadsheet_id,
@@ -159,7 +159,7 @@ def update_pomodoro(sheets_service, spreadsheet_id, pomodoro_id, data):
 def delete_pomodoro(sheets_service, spreadsheet_id, pomodoro_id):
     """Delete a pomodoro from Google Sheets."""
     # Find the row with this ID
-    result = (
+    id_lookup = (
         sheets_service.spreadsheets()
         .values()
         .get(
@@ -169,7 +169,7 @@ def delete_pomodoro(sheets_service, spreadsheet_id, pomodoro_id):
         .execute()
     )
 
-    rows = result.get("values", [])
+    rows = id_lookup.get("values", [])
     row_index = None
     for i, row in enumerate(rows):
         if row and row[0] == pomodoro_id:
@@ -215,7 +215,7 @@ def delete_pomodoro(sheets_service, spreadsheet_id, pomodoro_id):
 
 def get_settings(sheets_service, spreadsheet_id, defaults):
     """Get settings from Google Sheets."""
-    result = (
+    sheets_response = (
         sheets_service.spreadsheets()
         .values()
         .get(
@@ -225,7 +225,7 @@ def get_settings(sheets_service, spreadsheet_id, defaults):
         .execute()
     )
 
-    rows = result.get("values", [])
+    rows = sheets_response.get("values", [])
     settings = dict(defaults)
 
     for row in rows:
@@ -243,7 +243,7 @@ def get_settings(sheets_service, spreadsheet_id, defaults):
 def save_settings(sheets_service, spreadsheet_id, settings_data):
     """Save settings to Google Sheets."""
     # Get existing settings
-    result = (
+    existing_settings = (
         sheets_service.spreadsheets()
         .values()
         .get(
@@ -253,7 +253,7 @@ def save_settings(sheets_service, spreadsheet_id, settings_data):
         .execute()
     )
 
-    existing_rows = result.get("values", [])
+    existing_rows = existing_settings.get("values", [])
     existing_keys = {row[0]: i + 2 for i, row in enumerate(existing_rows) if row}  # 1-indexed, +1 for header
 
     # Prepare updates and appends
