@@ -314,22 +314,19 @@
             padding: 0.2rem 0.4rem;
             border-radius: 3px;
             margin-bottom: 0.15rem;
-            display: flex;
-            align-items: center;
-            gap: 0.25rem;
             position: relative;
             cursor: pointer;
+            display: flex;
+            align-items: center;
+            white-space: nowrap;
         }
         .week-pomo-name {
             flex: 1;
             min-width: 0;
-            white-space: nowrap;
             overflow: hidden;
-            text-overflow: ellipsis;
         }
         .week-pomo-count {
             flex-shrink: 0;
-            font-weight: 600;
         }
         .week-pomo:hover {
             z-index: 10;
@@ -1502,7 +1499,7 @@
             for (const item of sortedGroups) {
                 const color = TYPE_COLORS[item.type] || '#6b7280';
                 const displayName = item.name || item.type;
-                const countLabel = item.count > 1 ? item.count : '';
+                const countLabel = item.count > 1 ? `: ${item.count}` : '';
                 // Sort IDs by start_time descending so we can delete latest first
                 const sortedIds = item.ids.sort((a, b) => new Date(b.start_time) - new Date(a.start_time));
                 const idsJson = JSON.stringify(sortedIds.map(i => i.id)).replace(/"/g, '&quot;');
@@ -1511,7 +1508,7 @@
                 // Get the latest pomodoro ID for navigation
                 const latestId = sortedIds[0].id.replace(/'/g, "\\'").replace(/"/g, '&quot;');
                 html += `<div class="week-pomo" style="background: ${color}30; color: ${color};" title="${item.type}: ${item.name || '(no name)'}" onclick="navigateToPomodoro('${latestId}')">
-                    <span class="week-pomo-name">${displayName}</span>${countLabel ? `<span class="week-pomo-count">${countLabel}</span>` : ''}
+                    <span class="week-pomo-name">${displayName}</span><span class="week-pomo-count">${countLabel}</span>
                     <div class="week-pomo-controls">
                         <button class="week-pomo-btn remove" onclick="event.stopPropagation(); decrementPomoBlock(${idsJson})" title="Remove latest">−</button>
                         <button class="week-pomo-btn add" onclick="event.stopPropagation(); incrementPomoBlock('${typeEsc}', '${nameEsc}', '${dayStr}', ${isAM})" title="Add another">+</button>
