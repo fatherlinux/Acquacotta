@@ -12,12 +12,12 @@ from pathlib import Path
 # Allow OAuth scope changes (users may have previously granted different scopes)
 os.environ["OAUTHLIB_RELAX_TOKEN_SCOPE"] = "1"
 
-from flask import Flask, g, jsonify, redirect, render_template, request, session, url_for
+from flask import Flask, g, jsonify, redirect, render_template, request, session
 from flask_session import Session
-from werkzeug.middleware.proxy_fix import ProxyFix
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 import sheets_storage
 
@@ -92,7 +92,7 @@ def get_stored_spreadsheet_id(email):
     """Get stored spreadsheet_id for a user email."""
     mapping_path = get_user_spreadsheet_mapping_path()
     if mapping_path.exists():
-        with open(mapping_path, "r") as f:
+        with open(mapping_path) as f:
             mapping = json.load(f)
             return mapping.get(email)
     return None
@@ -103,7 +103,7 @@ def save_spreadsheet_id(email, spreadsheet_id):
     mapping_path = get_user_spreadsheet_mapping_path()
     mapping = {}
     if mapping_path.exists():
-        with open(mapping_path, "r") as f:
+        with open(mapping_path) as f:
             mapping = json.load(f)
     mapping[email] = spreadsheet_id
     with open(mapping_path, "w") as f:
@@ -115,6 +115,7 @@ def get_user_db_path():
     if "user_email" in session:
         # Create a safe filename from email
         import hashlib
+
         email_hash = hashlib.md5(session["user_email"].encode()).hexdigest()[:12]
         safe_email = session["user_email"].replace("@", "_at_").replace(".", "_")
         # Use both readable name and hash for uniqueness
@@ -459,6 +460,7 @@ def auth_google():
         return redirect(authorization_url)
     except Exception as e:
         import traceback
+
         return f"<pre>Error: {e}\n\n{traceback.format_exc()}</pre>", 500
 
 
@@ -526,10 +528,14 @@ def auth_callback():
                 "name": "Acquacotta - Pomodoro Tracker",
                 "mimeType": "application/vnd.google-apps.spreadsheet",
             }
-            spreadsheet = drive_service.files().create(
-                body=file_metadata,
-                fields="id",
-            ).execute()
+            spreadsheet = (
+                drive_service.files()
+                .create(
+                    body=file_metadata,
+                    fields="id",
+                )
+                .execute()
+            )
             session["spreadsheet_id"] = spreadsheet["id"]
             session["spreadsheet_existed"] = False
 
@@ -550,11 +556,7 @@ def auth_callback():
                                 "fields": "title",
                             }
                         },
-                        {
-                            "addSheet": {
-                                "properties": {"title": "Settings"}
-                            }
-                        },
+                        {"addSheet": {"properties": {"title": "Settings"}}},
                     ]
                 },
             ).execute()
@@ -582,6 +584,7 @@ def auth_callback():
         return redirect("/")
     except Exception as e:
         import traceback
+
         return f"<pre>Error: {e}\n\n{traceback.format_exc()}</pre>", 500
 
 
@@ -605,18 +608,22 @@ def auth_logout():
 def auth_status():
     """Get current authentication status."""
     if use_google_sheets():
-        return jsonify({
-            "logged_in": True,
-            "email": session.get("user_email"),
-            "name": session.get("user_name"),
-            "picture": session.get("user_picture"),
-            "spreadsheet_id": session.get("spreadsheet_id"),
-            "needs_initial_sync": session.get("needs_initial_sync", False),
-        })
-    return jsonify({
-        "logged_in": False,
-        "google_configured": bool(GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET),
-    })
+        return jsonify(
+            {
+                "logged_in": True,
+                "email": session.get("user_email"),
+                "name": session.get("user_name"),
+                "picture": session.get("user_picture"),
+                "spreadsheet_id": session.get("spreadsheet_id"),
+                "needs_initial_sync": session.get("needs_initial_sync", False),
+            }
+        )
+    return jsonify(
+        {
+            "logged_in": False,
+            "google_configured": bool(GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET),
+        }
+    )
 
 
 @app.route("/api/auth/spreadsheet", methods=["POST"])
@@ -638,9 +645,11 @@ def update_spreadsheet():
     except Exception as e:
         error_msg = str(e)
         if "404" in error_msg or "not found" in error_msg.lower():
-            return jsonify({
-                "error": "Cannot access this spreadsheet. With drive.file scope, you can only access spreadsheets created by this app instance."
-            }), 400
+            return jsonify(
+                {
+                    "error": "Cannot access this spreadsheet. With drive.file scope, you can only access spreadsheets created by this app instance."
+                }
+            ), 400
         return jsonify({"error": f"Cannot access spreadsheet: {error_msg}"}), 400
 
     # Update session
@@ -964,23 +973,24 @@ def get_report(period):
     daily_totals = []
     for d in dates:
         day_str = d.strftime("%Y-%m-%d")
-        day_pomodoros = [
-            p for p in pomodoros
-            if p["start_time"].startswith(day_str)
-        ]
-        daily_totals.append({
-            "date": day_str,
-            "minutes": sum(p["duration_minutes"] for p in day_pomodoros),
-            "count": len(day_pomodoros),
-        })
+        day_pomodoros = [p for p in pomodoros if p["start_time"].startswith(day_str)]
+        daily_totals.append(
+            {
+                "date": day_str,
+                "minutes": sum(p["duration_minutes"] for p in day_pomodoros),
+                "count": len(day_pomodoros),
+            }
+        )
 
-    return jsonify({
-        "period": period,
-        "total_minutes": total_minutes,
-        "total_pomodoros": total_count,
-        "by_type": by_type,
-        "daily_totals": daily_totals,
-    })
+    return jsonify(
+        {
+            "period": period,
+            "total_minutes": total_minutes,
+            "total_pomodoros": total_count,
+            "by_type": by_type,
+            "daily_totals": daily_totals,
+        }
+    )
 
 
 @app.route("/api/export")
@@ -1003,6 +1013,7 @@ def export_csv():
         )
 
     from flask import Response
+
     return Response(
         "\n".join(lines),
         mimetype="text/csv",
@@ -1031,15 +1042,17 @@ def get_sync_status():
     last_sync_row = db.execute("SELECT value FROM sync_status WHERE key = 'last_sync'").fetchone()
     last_full_sync_row = db.execute("SELECT value FROM sync_status WHERE key = 'last_full_sync'").fetchone()
 
-    return jsonify({
-        "syncing": sync_in_progress,
-        "pending_operations": pending_count,
-        "unsynced_pomodoros": unsynced_count,
-        "last_sync": last_sync_row["value"] if last_sync_row else None,
-        "last_full_sync": last_full_sync_row["value"] if last_full_sync_row else None,
-        "last_error": last_sync_error,
-        "google_connected": use_google_sheets(),
-    })
+    return jsonify(
+        {
+            "syncing": sync_in_progress,
+            "pending_operations": pending_count,
+            "unsynced_pomodoros": unsynced_count,
+            "last_sync": last_sync_row["value"] if last_sync_row else None,
+            "last_full_sync": last_full_sync_row["value"] if last_full_sync_row else None,
+            "last_error": last_sync_error,
+            "google_connected": use_google_sheets(),
+        }
+    )
 
 
 @app.route("/api/sync/check")
@@ -1071,12 +1084,14 @@ def check_sync_sources():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-    return jsonify({
-        "local_count": local_count,
-        "shared_cache_count": shared_cache_count,
-        "sheets_count": sheets_count,
-        "needs_initial_sync": session.get("needs_initial_sync", False),
-    })
+    return jsonify(
+        {
+            "local_count": local_count,
+            "shared_cache_count": shared_cache_count,
+            "sheets_count": sheets_count,
+            "needs_initial_sync": session.get("needs_initial_sync", False),
+        }
+    )
 
 
 @app.route("/api/sync/now", methods=["POST"])
@@ -1257,14 +1272,16 @@ def migrate_data():
     # Clear the needs_initial_sync flag - migration is complete
     session["needs_initial_sync"] = False
 
-    return jsonify({
-        "success": True,
-        "pomodoros_migrated": migrated_pomodoros,
-        "pomodoros_skipped": skipped_pomodoros,
-        "pomodoros_direction": pomodoros_direction,
-        "settings_migrated": settings_migrated,
-        "settings_direction": settings_direction,
-    })
+    return jsonify(
+        {
+            "success": True,
+            "pomodoros_migrated": migrated_pomodoros,
+            "pomodoros_skipped": skipped_pomodoros,
+            "pomodoros_direction": pomodoros_direction,
+            "settings_migrated": settings_migrated,
+            "settings_direction": settings_direction,
+        }
+    )
 
 
 if __name__ == "__main__":

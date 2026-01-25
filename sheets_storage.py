@@ -5,10 +5,15 @@ import json
 
 def get_pomodoros(sheets_service, spreadsheet_id, start_date=None, end_date=None):
     """Get pomodoros from Google Sheets."""
-    result = sheets_service.spreadsheets().values().get(
-        spreadsheetId=spreadsheet_id,
-        range="Pomodoros!A2:G",
-    ).execute()
+    result = (
+        sheets_service.spreadsheets()
+        .values()
+        .get(
+            spreadsheetId=spreadsheet_id,
+            range="Pomodoros!A2:G",
+        )
+        .execute()
+    )
 
     rows = result.get("values", [])
     pomodoros = []
@@ -47,15 +52,17 @@ def save_pomodoro(sheets_service, spreadsheet_id, pomodoro):
         valueInputOption="RAW",
         insertDataOption="INSERT_ROWS",
         body={
-            "values": [[
-                pomodoro["id"],
-                pomodoro["name"],
-                pomodoro["type"],
-                pomodoro["start_time"],
-                pomodoro["end_time"],
-                pomodoro["duration_minutes"],
-                pomodoro.get("notes") or "",
-            ]]
+            "values": [
+                [
+                    pomodoro["id"],
+                    pomodoro["name"],
+                    pomodoro["type"],
+                    pomodoro["start_time"],
+                    pomodoro["end_time"],
+                    pomodoro["duration_minutes"],
+                    pomodoro.get("notes") or "",
+                ]
+            ]
         },
     ).execute()
 
@@ -67,15 +74,17 @@ def save_pomodoros_batch(sheets_service, spreadsheet_id, pomodoros):
 
     rows = []
     for p in pomodoros:
-        rows.append([
-            p["id"],
-            p["name"],
-            p["type"],
-            p["start_time"],
-            p["end_time"],
-            p["duration_minutes"],
-            p.get("notes") or "",
-        ])
+        rows.append(
+            [
+                p["id"],
+                p["name"],
+                p["type"],
+                p["start_time"],
+                p["end_time"],
+                p["duration_minutes"],
+                p.get("notes") or "",
+            ]
+        )
 
     sheets_service.spreadsheets().values().append(
         spreadsheetId=spreadsheet_id,
@@ -89,10 +98,15 @@ def save_pomodoros_batch(sheets_service, spreadsheet_id, pomodoros):
 def update_pomodoro(sheets_service, spreadsheet_id, pomodoro_id, data):
     """Update a pomodoro in Google Sheets."""
     # Find the row with this ID
-    result = sheets_service.spreadsheets().values().get(
-        spreadsheetId=spreadsheet_id,
-        range="Pomodoros!A:A",
-    ).execute()
+    result = (
+        sheets_service.spreadsheets()
+        .values()
+        .get(
+            spreadsheetId=spreadsheet_id,
+            range="Pomodoros!A:A",
+        )
+        .execute()
+    )
 
     rows = result.get("values", [])
     row_index = None
@@ -105,10 +119,15 @@ def update_pomodoro(sheets_service, spreadsheet_id, pomodoro_id, data):
         return False
 
     # Get current row data
-    current = sheets_service.spreadsheets().values().get(
-        spreadsheetId=spreadsheet_id,
-        range=f"Pomodoros!A{row_index}:G{row_index}",
-    ).execute()
+    current = (
+        sheets_service.spreadsheets()
+        .values()
+        .get(
+            spreadsheetId=spreadsheet_id,
+            range=f"Pomodoros!A{row_index}:G{row_index}",
+        )
+        .execute()
+    )
 
     current_values = current.get("values", [[]])[0]
     while len(current_values) < 7:
@@ -135,10 +154,15 @@ def update_pomodoro(sheets_service, spreadsheet_id, pomodoro_id, data):
 def delete_pomodoro(sheets_service, spreadsheet_id, pomodoro_id):
     """Delete a pomodoro from Google Sheets."""
     # Find the row with this ID
-    result = sheets_service.spreadsheets().values().get(
-        spreadsheetId=spreadsheet_id,
-        range="Pomodoros!A:A",
-    ).execute()
+    result = (
+        sheets_service.spreadsheets()
+        .values()
+        .get(
+            spreadsheetId=spreadsheet_id,
+            range="Pomodoros!A:A",
+        )
+        .execute()
+    )
 
     rows = result.get("values", [])
     row_index = None
@@ -151,9 +175,7 @@ def delete_pomodoro(sheets_service, spreadsheet_id, pomodoro_id):
         return False
 
     # Get sheet ID
-    spreadsheet = sheets_service.spreadsheets().get(
-        spreadsheetId=spreadsheet_id
-    ).execute()
+    spreadsheet = sheets_service.spreadsheets().get(spreadsheetId=spreadsheet_id).execute()
 
     sheet_id = None
     for sheet in spreadsheet["sheets"]:
@@ -168,16 +190,18 @@ def delete_pomodoro(sheets_service, spreadsheet_id, pomodoro_id):
     sheets_service.spreadsheets().batchUpdate(
         spreadsheetId=spreadsheet_id,
         body={
-            "requests": [{
-                "deleteDimension": {
-                    "range": {
-                        "sheetId": sheet_id,
-                        "dimension": "ROWS",
-                        "startIndex": row_index,
-                        "endIndex": row_index + 1,
+            "requests": [
+                {
+                    "deleteDimension": {
+                        "range": {
+                            "sheetId": sheet_id,
+                            "dimension": "ROWS",
+                            "startIndex": row_index,
+                            "endIndex": row_index + 1,
+                        }
                     }
                 }
-            }]
+            ]
         },
     ).execute()
 
@@ -186,10 +210,15 @@ def delete_pomodoro(sheets_service, spreadsheet_id, pomodoro_id):
 
 def get_settings(sheets_service, spreadsheet_id, defaults):
     """Get settings from Google Sheets."""
-    result = sheets_service.spreadsheets().values().get(
-        spreadsheetId=spreadsheet_id,
-        range="Settings!A2:B",
-    ).execute()
+    result = (
+        sheets_service.spreadsheets()
+        .values()
+        .get(
+            spreadsheetId=spreadsheet_id,
+            range="Settings!A2:B",
+        )
+        .execute()
+    )
 
     rows = result.get("values", [])
     settings = dict(defaults)
@@ -209,10 +238,15 @@ def get_settings(sheets_service, spreadsheet_id, defaults):
 def save_settings(sheets_service, spreadsheet_id, settings_data):
     """Save settings to Google Sheets."""
     # Get existing settings
-    result = sheets_service.spreadsheets().values().get(
-        spreadsheetId=spreadsheet_id,
-        range="Settings!A2:B",
-    ).execute()
+    result = (
+        sheets_service.spreadsheets()
+        .values()
+        .get(
+            spreadsheetId=spreadsheet_id,
+            range="Settings!A2:B",
+        )
+        .execute()
+    )
 
     existing_rows = result.get("values", [])
     existing_keys = {row[0]: i + 2 for i, row in enumerate(existing_rows) if row}  # 1-indexed, +1 for header
@@ -225,10 +259,12 @@ def save_settings(sheets_service, spreadsheet_id, settings_data):
         value_str = json.dumps(value)
         if key in existing_keys:
             row_index = existing_keys[key]
-            updates.append({
-                "range": f"Settings!A{row_index}:B{row_index}",
-                "values": [[key, value_str]],
-            })
+            updates.append(
+                {
+                    "range": f"Settings!A{row_index}:B{row_index}",
+                    "values": [[key, value_str]],
+                }
+            )
         else:
             appends.append([key, value_str])
 
