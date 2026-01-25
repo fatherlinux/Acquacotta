@@ -1,13 +1,13 @@
 # Test image for Acquacotta
 # Built on top of acquacotta-base - includes all test frameworks
-# Used by CI/CD for running tests quickly
+# Used by CI/CD for running Python tests and code quality checks
+#
+# Note: JavaScript tests run natively in GitHub Actions (test.yml)
+# because Chromium isn't available in UBI10 repos
 #
 # Build: podman build -f Containerfile.test -t quay.io/fatherlinux/acquacotta-test .
 
 FROM quay.io/fatherlinux/acquacotta-base:latest
-
-# Install Node.js for JavaScript tests (Puppeteer)
-RUN dnf install -y nodejs npm && dnf clean all
 
 # Install build tools and Rust for Gourmand
 RUN dnf install -y gcc make && dnf clean all
@@ -20,11 +20,6 @@ RUN cargo install --git https://codeberg.org/mattdm/gourmand.git
 # Install Python dev/test dependencies
 COPY requirements-dev.txt .
 RUN pip3.12 install --no-cache-dir -r requirements-dev.txt
-
-# Install Puppeteer for JS tests
-RUN npm install -g puppeteer
-ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
-RUN dnf install -y chromium && dnf clean all
 
 WORKDIR /app
 
@@ -43,7 +38,6 @@ COPY gourmand-exceptions.toml .
 # Set test environment
 ENV FLASK_SECRET_KEY=test-secret-key
 ENV CLEAR_CACHE_ON_START=false
-ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
 
-# Default command runs all tests
+# Default command runs Python tests and code quality checks
 CMD ["sh", "-c", "ruff check . && ruff format --check . && pytest tests/ -v && gourmand --full ."]
