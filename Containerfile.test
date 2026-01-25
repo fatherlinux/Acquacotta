@@ -9,7 +9,8 @@ FROM quay.io/fatherlinux/acquacotta-base:latest
 # Install Node.js for JavaScript tests (Puppeteer)
 RUN dnf install -y nodejs npm && dnf clean all
 
-# Install Rust for Gourmand
+# Install build tools and Rust for Gourmand
+RUN dnf install -y gcc make && dnf clean all
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 ENV PATH="/root/.cargo/bin:${PATH}"
 
