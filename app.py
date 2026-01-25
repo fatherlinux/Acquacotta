@@ -7,6 +7,7 @@ import sqlite3
 import threading
 import uuid
 from datetime import datetime, timedelta
+from enum import Enum
 from http import HTTPStatus
 from pathlib import Path
 
@@ -18,9 +19,19 @@ from flask_session import Session
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 import sheets_storage
+
+
+class ReportPeriod(Enum):
+    """Valid report period types."""
+
+    DAY = "day"
+    WEEK = "week"
+    MONTH = "month"
+
 
 # Global sync state
 sync_lock = threading.Lock()
@@ -208,14 +219,17 @@ def init_db(db_path=None):
         )
     """)
     # Add synced column if it doesn't exist (for existing databases)
+    # SQLite doesn't support IF NOT EXISTS for ALTER TABLE, so we catch the error
     try:
         db.execute("ALTER TABLE pomodoros ADD COLUMN synced INTEGER DEFAULT 0")
-    except sqlite3.OperationalError:
-        pass  # Column already exists
+    except sqlite3.OperationalError as e:
+        if "duplicate column name" not in str(e).lower():
+            raise
     try:
         db.execute("ALTER TABLE settings ADD COLUMN synced INTEGER DEFAULT 0")
-    except sqlite3.OperationalError:
-        pass  # Column already exists
+    except sqlite3.OperationalError as e:
+        if "duplicate column name" not in str(e).lower():
+            raise
     db.commit()
     db.close()
 
@@ -544,8 +558,8 @@ def auth_callback():
                 sheets_service.spreadsheets().get(spreadsheetId=stored_spreadsheet_id).execute()
                 session["spreadsheet_id"] = stored_spreadsheet_id
                 session["spreadsheet_existed"] = True
-            except Exception:
-                # Can't access old spreadsheet, need to create new one
+            except HttpError:
+                # Can't access old spreadsheet (deleted, permissions changed), need to create new one
                 stored_spreadsheet_id = None
 
         if not stored_spreadsheet_id:
@@ -936,16 +950,21 @@ def _parse_iso_date_range(start_iso, end_iso):
 
 def _calculate_period_date_range(period, ref_date):
     """Calculate date range for a given period (day, week, month)."""
-    if period == "day":
+    try:
+        period_enum = ReportPeriod(period)
+    except ValueError:
+        return None, None, None
+
+    if period_enum == ReportPeriod.DAY:
         start = ref_date.replace(hour=0, minute=0, second=0, microsecond=0)
         end = start + timedelta(days=1)
         dates = [start]
-    elif period == "week":
+    elif period_enum == ReportPeriod.WEEK:
         start = ref_date - timedelta(days=ref_date.weekday())
         start = start.replace(hour=0, minute=0, second=0, microsecond=0)
         end = start + timedelta(days=7)
         dates = [start + timedelta(days=i) for i in range(7)]
-    elif period == "month":
+    elif period_enum == ReportPeriod.MONTH:
         start = ref_date.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
         if ref_date.month == MONTHS_IN_YEAR:
             end = start.replace(year=ref_date.year + 1, month=1)
@@ -956,8 +975,6 @@ def _calculate_period_date_range(period, ref_date):
         while d < end:
             dates.append(d)
             d += timedelta(days=1)
-    else:
-        return None, None, None
     return dates, start.isoformat() + "Z", end.isoformat() + "Z"
 
 
@@ -1102,16 +1119,16 @@ def check_sync_sources():
             shared_db.row_factory = sqlite3.Row
             shared_cache_count = shared_db.execute("SELECT COUNT(*) FROM pomodoros").fetchone()[0]
             shared_db.close()
-        except Exception:
-            pass  # Shared cache doesn't exist or is empty
+        except sqlite3.OperationalError:
+            shared_cache_count = 0  # Table doesn't exist in shared cache
 
     # Get Google Sheets count
     try:
         service = get_sheets_service()
         sheets_pomodoros = sheets_storage.get_pomodoros(service, session["spreadsheet_id"])
         sheets_count = len(sheets_pomodoros)
-    except Exception as e:
-        return jsonify({"error": str(e)}), HTTPStatus.INTERNAL_SERVER_ERROR
+    except HttpError as e:
+        return jsonify({"error": f"Google Sheets API error: {e}"}), HTTPStatus.INTERNAL_SERVER_ERROR
 
     return jsonify(
         {
@@ -1134,8 +1151,8 @@ def trigger_sync():
     # First pull from Google Sheets
     try:
         count = sync_from_sheets(db_path, session["credentials"], session["spreadsheet_id"])
-    except Exception as e:
-        return jsonify({"error": str(e)}), HTTPStatus.INTERNAL_SERVER_ERROR
+    except HttpError as e:
+        return jsonify({"error": f"Google Sheets sync failed: {e}"}), HTTPStatus.INTERNAL_SERVER_ERROR
 
     # Then push any pending changes
     start_background_sync(db_path, session["credentials"], session["spreadsheet_id"])
