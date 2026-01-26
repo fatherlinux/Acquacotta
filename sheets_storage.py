@@ -337,16 +337,18 @@ def deduplicate_pomodoros(sheets_service, spreadsheet_id):
 
     requests = []
     for row_index in rows_to_delete:
-        requests.append({
-            "deleteDimension": {
-                "range": {
-                    "sheetId": sheet_id,
-                    "dimension": "ROWS",
-                    "startIndex": row_index,
-                    "endIndex": row_index + 1,
+        requests.append(
+            {
+                "deleteDimension": {
+                    "range": {
+                        "sheetId": sheet_id,
+                        "dimension": "ROWS",
+                        "startIndex": row_index,
+                        "endIndex": row_index + 1,
+                    }
                 }
             }
-        })
+        )
 
     # Execute batch delete
     sheets_service.spreadsheets().batchUpdate(
@@ -357,8 +359,39 @@ def deduplicate_pomodoros(sheets_service, spreadsheet_id):
     return {"removed": len(rows_to_delete), "total": len(rows) - 1 - len(rows_to_delete)}
 
 
-def save_settings(sheets_service, spreadsheet_id, settings_data):
-    """Save settings to Google Sheets."""
+def save_settings(sheets_service, spreadsheet_id, settings_data, replace_all=False):
+    """Save settings to Google Sheets.
+
+    Args:
+        sheets_service: Google Sheets API service
+        spreadsheet_id: ID of the spreadsheet
+        settings_data: Dictionary of settings to save
+        replace_all: If True, clear all settings first and replace with new data
+    """
+    if replace_all:
+        # Clear all settings rows (keep header) and replace with new data
+        sheets_service.spreadsheets().values().clear(
+            spreadsheetId=spreadsheet_id,
+            range="Settings!A2:B",
+        ).execute()
+
+        # Prepare all settings as rows
+        rows = []
+        for key, value in settings_data.items():
+            value_str = json.dumps(value)
+            rows.append([key, value_str])
+
+        # Write all settings at once
+        if rows:
+            sheets_service.spreadsheets().values().update(
+                spreadsheetId=spreadsheet_id,
+                range="Settings!A2:B",
+                valueInputOption="RAW",
+                body={"values": rows},
+            ).execute()
+        return
+
+    # Incremental update mode (default)
     # Get existing settings
     existing_settings = (
         sheets_service.spreadsheets()

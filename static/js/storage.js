@@ -70,7 +70,8 @@
     // Storage state
     let db = null;
     let authStatus = null;
-    let storedCredentials = null;  // OAuth credentials from IndexedDB
+    let storedCredentials = null;  // OAuth credentials from IndexedDB (ephemeral)
+    let cachedSpreadsheetId = null;  // Spreadsheet ID from SETTINGS (persistent)
     let isOnline = navigator.onLine;
     let syncInProgress = false;
     let syncLockPromise = null;  // Promise-based lock to prevent race conditions
@@ -232,10 +233,14 @@
 
     /**
      * Make authenticated API call with stored credentials
+     * Spreadsheet ID comes from SETTINGS (persistent), credentials from AUTH (ephemeral)
      */
     async function authenticatedFetch(url, options = {}) {
         if (!storedCredentials) {
             throw new Error('Not logged in');
+        }
+        if (!cachedSpreadsheetId) {
+            throw new Error('No spreadsheet configured');
         }
 
         // Add credentials to request body for POST/PUT, or as header for GET/DELETE
@@ -251,7 +256,7 @@
                 client_id: storedCredentials.client_id,
                 client_secret: storedCredentials.client_secret,
                 scopes: storedCredentials.scopes,
-                spreadsheet_id: storedCredentials.spreadsheet_id
+                spreadsheet_id: cachedSpreadsheetId
             }));
         } else {
             // For POST/PUT, merge credentials into body
@@ -265,7 +270,7 @@
                 client_id: storedCredentials.client_id,
                 client_secret: storedCredentials.client_secret,
                 scopes: storedCredentials.scopes,
-                spreadsheet_id: storedCredentials.spreadsheet_id
+                spreadsheet_id: cachedSpreadsheetId
             };
             options.body = JSON.stringify(body);
         }
@@ -596,6 +601,15 @@
                 await putInStore(STORES.SETTINGS, { key, value, synced: true });
             }
 
+            // Preserve spreadsheet_id in SETTINGS (it's not in Sheet, it's the ID of the Sheet itself)
+            if (cachedSpreadsheetId) {
+                await putInStore(STORES.SETTINGS, {
+                    key: 'spreadsheet_id',
+                    value: cachedSpreadsheetId,
+                    synced: true
+                });
+            }
+
             // Update last sync time
             await putInStore(STORES.SYNC_STATUS, {
                 key: 'last_pull_sync',
@@ -625,26 +639,27 @@
             // Open IndexedDB first
             await openDatabase();
 
-            // Load credentials from IndexedDB (not from server session)
+            // Load credentials from AUTH store (ephemeral - OAuth tokens only)
             const creds = await loadCredentials();
 
-            // Build auth status from stored credentials
-            if (creds && creds.token && creds.spreadsheet_id) {
+            // Load spreadsheet_id from SETTINGS store (persistent)
+            const spreadsheetIdSetting = await getFromStore(STORES.SETTINGS, 'spreadsheet_id');
+            cachedSpreadsheetId = spreadsheetIdSetting ? spreadsheetIdSetting.value : null;
+
+            // Load spreadsheet_existed from SETTINGS store
+            const spreadsheetExistedSetting = await getFromStore(STORES.SETTINGS, 'spreadsheet_existed');
+            const spreadsheetExisted = spreadsheetExistedSetting ? spreadsheetExistedSetting.value : false;
+
+            // Build auth status from credentials (AUTH) + spreadsheet_id (SETTINGS)
+            if (creds && creds.token && cachedSpreadsheetId) {
                 authStatus = {
                     logged_in: true,
                     email: creds.user_email,
                     name: creds.user_name,
                     picture: creds.user_picture,
-                    spreadsheet_id: creds.spreadsheet_id,
-                    needs_initial_sync: !creds.spreadsheet_existed
+                    spreadsheet_id: cachedSpreadsheetId,
+                    needs_initial_sync: !spreadsheetExisted
                 };
-
-                // Save spreadsheet_id to Settings for persistence across logins
-                await putInStore(STORES.SETTINGS, {
-                    key: 'spreadsheet_id',
-                    value: creds.spreadsheet_id,
-                    synced: true
-                });
             } else {
                 authStatus = {
                     logged_in: false,
@@ -672,7 +687,7 @@
 
             // Handle initial sync based on whether sheet existed
             if (authStatus.logged_in && storedCredentials) {
-                if (storedCredentials.spreadsheet_existed) {
+                if (spreadsheetExisted) {
                     // Existing sheet: bidirectional pomodoro sync + pull settings from Sheet
                     // Only on first load after login (check if we've done this already)
                     const syncStatus = await getFromStore(STORES.SYNC_STATUS, 'initial_sync_done');
@@ -735,12 +750,12 @@
                             // Re-save spreadsheet_id after clearing (it's not in Sheet settings)
                             await putInStore(STORES.SETTINGS, {
                                 key: 'spreadsheet_id',
-                                value: storedCredentials.spreadsheet_id,
+                                value: cachedSpreadsheetId,
                                 synced: false  // Mark as unsynced so it gets pushed to Sheet
                             });
                             // Queue the spreadsheet_id to be saved to the Sheet
                             await addToSyncQueue('update', 'settings', 'spreadsheet_id', {
-                                spreadsheet_id: storedCredentials.spreadsheet_id
+                                spreadsheet_id: cachedSpreadsheetId
                             });
                         }
 
@@ -775,10 +790,9 @@
                         }
                         // Process the queue
                         await processSyncQueue();
-                        // Mark initial push done and update spreadsheet_existed
+                        // Mark initial push done and update spreadsheet_existed in SETTINGS
                         await putInStore(STORES.SYNC_STATUS, { key: 'initial_push_done', value: true });
-                        storedCredentials.spreadsheet_existed = true;
-                        await putInStore(STORES.AUTH, { key: 'credentials', ...storedCredentials });
+                        await putInStore(STORES.SETTINGS, { key: 'spreadsheet_existed', value: true, synced: true });
                     }
                 }
             }
@@ -828,21 +842,55 @@
          */
         getStoredSpreadsheetId: async function() {
             try {
+                // Ensure database is open
+                if (!db) {
+                    await openDatabase();
+                }
                 const setting = await getFromStore(STORES.SETTINGS, 'spreadsheet_id');
                 return setting ? setting.value : null;
             } catch (e) {
+                console.error('getStoredSpreadsheetId error:', e);
                 return null;
             }
         },
 
         /**
-         * Logout - clear credentials from IndexedDB
+         * Logout - clear credentials and sync status from IndexedDB
+         * Spreadsheet_id in SETTINGS is preserved for re-login convenience
          * @returns {Promise}
          */
         logout: async function() {
             await clearCredentials();
+            cachedSpreadsheetId = null;  // Clear cached value (will reload from SETTINGS on next init)
+            // Clear sync status so next login will re-sync from Sheet
+            await clearStore(STORES.SYNC_STATUS);
             authStatus = { logged_in: false, google_configured: true };
             dispatchSyncStatusEvent();
+        },
+
+        /**
+         * Update spreadsheet ID in IndexedDB (SETTINGS store only)
+         * @param {string} newId - New spreadsheet ID
+         * @returns {Promise}
+         */
+        updateSpreadsheetId: async function(newId) {
+            // Update SETTINGS store (persistent)
+            await putInStore(STORES.SETTINGS, {
+                key: 'spreadsheet_id',
+                value: newId,
+                synced: false
+            });
+
+            // Update cached value for current session
+            cachedSpreadsheetId = newId;
+
+            // Queue sync to save spreadsheet_id to Google Sheets Settings
+            await addToSyncQueue('update', 'settings', 'spreadsheet_id', {
+                spreadsheet_id: newId
+            });
+
+            // Process the queue
+            await processSyncQueue();
         },
 
         /**
@@ -1246,6 +1294,7 @@
 
         /**
          * Migrate local IndexedDB data to Google Sheets (on login)
+         * Uses batch upload for efficiency
          * @returns {Promise<object>}
          */
         migrateLocalToBackend: async function() {
@@ -1258,53 +1307,36 @@
                 return { migrated: 0, skipped: 0 };
             }
 
-            // Get existing pomodoros from Sheets to avoid duplicates
-            let existingIds = new Set();
             try {
-                const res = await authenticatedFetch('/api/sheets/pomodoros');
+                // Use batch endpoint - server handles duplicate checking
+                const res = await authenticatedFetch('/api/sheets/pomodoros/batch', {
+                    method: 'POST',
+                    body: JSON.stringify({ pomodoros: pomodoros })
+                });
+
                 if (res.ok) {
-                    const existing = await res.json();
-                    existingIds = new Set(existing.map(p => p.id));
-                }
-            } catch (e) {
-                console.error('Error fetching existing pomodoros:', e);
-            }
-
-            let migrated = 0;
-            let skipped = 0;
-
-            for (const pomo of pomodoros) {
-                if (existingIds.has(pomo.id)) {
-                    skipped++;
-                    // Mark as synced since it already exists
-                    pomo.synced = true;
-                    await putInStore(STORES.POMODOROS, pomo);
-                    continue;
-                }
-
-                try {
-                    const res = await authenticatedFetch('/api/sheets/pomodoros', {
-                        method: 'POST',
-                        body: JSON.stringify(pomo)
-                    });
-                    if (res.ok) {
-                        migrated++;
+                    const result = await res.json();
+                    // Mark all as synced
+                    for (const pomo of pomodoros) {
                         pomo.synced = true;
                         await putInStore(STORES.POMODOROS, pomo);
                     }
-                } catch (e) {
-                    console.error('Error migrating pomodoro:', e);
+                    return { migrated: result.count || 0, skipped: pomodoros.length - (result.count || 0) };
+                } else {
+                    return { migrated: 0, skipped: 0, error: `HTTP ${res.status}` };
                 }
+            } catch (e) {
+                console.error('Error migrating pomodoros:', e);
+                return { migrated: 0, skipped: 0, error: e.message };
             }
-
-            return { migrated, skipped };
         },
 
         /**
          * Migrate local settings to backend
+         * @param {boolean} replaceAll - If true, replace all settings in Sheet (used by Overwrite Google)
          * @returns {Promise<object>}
          */
-        migrateLocalSettingsToBackend: async function() {
+        migrateLocalSettingsToBackend: async function(replaceAll = false) {
             if (!authStatus || !authStatus.logged_in) {
                 return { migrated: false, error: 'Not logged in' };
             }
@@ -1317,6 +1349,11 @@
             const settings = {};
             for (const record of settingsRecords) {
                 settings[record.key] = record.value;
+            }
+
+            // Add replace_all flag if requested
+            if (replaceAll) {
+                settings._replace_all = true;
             }
 
             try {

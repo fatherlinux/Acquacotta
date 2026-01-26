@@ -5,6 +5,8 @@ The server only handles OAuth and proxies requests to Google Sheets.
 All data storage happens in the browser's IndexedDB.
 """
 
+import base64
+import json
 import os
 from unittest.mock import MagicMock, patch
 
@@ -90,20 +92,66 @@ def mock_sheets_service():
     return service
 
 
+class AuthenticatedTestClient:
+    """Wrapper around Flask test client that includes credentials in all requests.
+
+    The stateless architecture expects credentials in X-Credentials header (for GET/DELETE)
+    or _credentials in request body (for POST/PUT). This wrapper automatically adds them.
+    """
+
+    def __init__(self, client, credentials):
+        self._client = client
+        self._credentials = credentials
+        self._credentials_header = base64.b64encode(json.dumps(credentials).encode()).decode()
+
+    def _add_credentials_header(self, kwargs):
+        """Add X-Credentials header to request."""
+        headers = kwargs.get("headers", {})
+        headers["X-Credentials"] = self._credentials_header
+        kwargs["headers"] = headers
+        return kwargs
+
+    def get(self, *args, **kwargs):
+        return self._client.get(*args, **self._add_credentials_header(kwargs))
+
+    def post(self, *args, **kwargs):
+        return self._client.post(*args, **self._add_credentials_header(kwargs))
+
+    def put(self, *args, **kwargs):
+        return self._client.put(*args, **self._add_credentials_header(kwargs))
+
+    def delete(self, *args, **kwargs):
+        return self._client.delete(*args, **self._add_credentials_header(kwargs))
+
+    def session_transaction(self):
+        """Proxy session_transaction for tests that need to manipulate session."""
+        return self._client.session_transaction()
+
+
 @pytest.fixture
 def authenticated_session(app):
-    """Create a session with mock authentication."""
+    """Create a session with mock authentication.
+
+    Returns a wrapped test client that automatically includes credentials
+    in request headers, matching the stateless architecture.
+    """
+    credentials = {
+        "token": "fake-token",
+        "refresh_token": "fake-refresh-token",
+        "token_uri": "https://oauth2.googleapis.com/token",
+        "client_id": "fake-client-id",
+        "client_secret": "fake-client-secret",
+        "scopes": ["https://www.googleapis.com/auth/drive.file"],
+        "spreadsheet_id": "fake-spreadsheet-id",
+    }
+
     with app.test_client() as client:
+        # Set session variables for endpoints that return session data (e.g., /api/auth/status)
         with client.session_transaction() as sess:
-            sess["credentials"] = {
-                "token": "fake-token",
-                "refresh_token": "fake-refresh-token",
-                "token_uri": "https://oauth2.googleapis.com/token",
-                "client_id": "fake-client-id",
-                "client_secret": "fake-client-secret",
-                "scopes": ["https://www.googleapis.com/auth/drive.file"],
-            }
+            sess["credentials"] = credentials
             sess["user_email"] = "test@example.com"
             sess["user_name"] = "Test User"
             sess["spreadsheet_id"] = "fake-spreadsheet-id"
-        yield client
+
+        # Wrap client to automatically include credentials in requests
+        yield AuthenticatedTestClient(client, credentials)

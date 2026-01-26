@@ -10,7 +10,7 @@ All data storage and CRUD operations happen in the browser's IndexedDB.
 """
 
 import json
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import sheets_storage
 
@@ -120,9 +120,7 @@ class TestSheetsProxyEndpoints:
                 assert data[0]["name"] == "Test"
                 mock_get.assert_called_once()
 
-    def test_create_pomodoro_with_auth(
-        self, authenticated_session, mock_sheets_service, sample_pomodoro
-    ):
+    def test_create_pomodoro_with_auth(self, authenticated_session, mock_sheets_service, sample_pomodoro):
         """POST /api/sheets/pomodoros should proxy to Sheets when authenticated."""
         with patch("app.get_sheets_service", return_value=mock_sheets_service):
             with patch.object(sheets_storage, "save_pomodoro") as mock_save:
@@ -134,14 +132,10 @@ class TestSheetsProxyEndpoints:
                 assert response.status_code == 200
                 mock_save.assert_called_once()
 
-    def test_update_pomodoro_with_auth(
-        self, authenticated_session, mock_sheets_service, sample_pomodoro
-    ):
+    def test_update_pomodoro_with_auth(self, authenticated_session, mock_sheets_service, sample_pomodoro):
         """PUT /api/sheets/pomodoros/<id> should proxy to Sheets when authenticated."""
         with patch("app.get_sheets_service", return_value=mock_sheets_service):
-            with patch.object(
-                sheets_storage, "update_pomodoro", return_value=True
-            ) as mock_update:
+            with patch.object(sheets_storage, "update_pomodoro", return_value=True) as mock_update:
                 response = authenticated_session.put(
                     "/api/sheets/pomodoros/test-uuid-1234",
                     json=sample_pomodoro,
@@ -153,12 +147,8 @@ class TestSheetsProxyEndpoints:
     def test_delete_pomodoro_with_auth(self, authenticated_session, mock_sheets_service):
         """DELETE /api/sheets/pomodoros/<id> should proxy to Sheets when authenticated."""
         with patch("app.get_sheets_service", return_value=mock_sheets_service):
-            with patch.object(
-                sheets_storage, "delete_pomodoro", return_value=True
-            ) as mock_delete:
-                response = authenticated_session.delete(
-                    "/api/sheets/pomodoros/test-uuid-1234"
-                )
+            with patch.object(sheets_storage, "delete_pomodoro", return_value=True) as mock_delete:
+                response = authenticated_session.delete("/api/sheets/pomodoros/test-uuid-1234")
                 assert response.status_code == 200
                 mock_delete.assert_called_once()
 
@@ -176,9 +166,7 @@ class TestSheetsProxyEndpoints:
                 assert data["timer_preset_4"] == 25
                 mock_get.assert_called_once()
 
-    def test_save_settings_with_auth(
-        self, authenticated_session, mock_sheets_service, sample_settings
-    ):
+    def test_save_settings_with_auth(self, authenticated_session, mock_sheets_service, sample_settings):
         """POST /api/sheets/settings should proxy to Sheets when authenticated."""
         with patch("app.get_sheets_service", return_value=mock_sheets_service):
             with patch.object(sheets_storage, "save_settings") as mock_save:

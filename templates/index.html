@@ -653,7 +653,7 @@
                     </p>
                     <div style="margin-bottom: 1rem;">
                         <label for="login-spreadsheet-id" style="font-size: 0.875rem; color: var(--text-secondary); display: block; margin-bottom: 0.25rem;">Existing Spreadsheet ID (optional):</label>
-                        <input type="text" id="login-spreadsheet-id" style="width: 20rem; max-width: 100%; font-family: monospace; font-size: 0.75rem; padding: 0.5rem;" placeholder="Leave blank to create new">
+                        <input type="text" id="login-spreadsheet-id" style="width: 24rem; max-width: 100%; font-family: monospace; font-size: 0.75rem; padding: 0.5rem;" placeholder="Leave blank to create new">
                         <p style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">
                             Find this in your Google Sheets URL: docs.google.com/spreadsheets/d/<strong>[ID]</strong>/edit
                         </p>
@@ -667,7 +667,7 @@
                 </div>
                 <div id="google-logged-in" style="display: none;">
                     <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem;">
-                        <img id="google-avatar" src="" alt="" style="width: 40px; height: 40px; border-radius: 50%;">
+                        <img id="google-avatar" src="" alt="" referrerpolicy="no-referrer" style="width: 40px; height: 40px; border-radius: 50%; display: none;">
                         <div>
                             <div id="google-name" style="font-weight: 500;"></div>
                             <div id="google-email" style="font-size: 0.875rem; color: var(--text-secondary);"></div>
@@ -682,11 +682,8 @@
                     </div>
                     <div style="margin-bottom: 1rem;">
                         <label for="spreadsheet-id" style="font-size: 0.875rem; color: var(--text-secondary); display: block; margin-bottom: 0.25rem;">Spreadsheet ID:</label>
-                        <div style="display: flex; gap: 0.5rem;">
-                            <input type="text" id="spreadsheet-id" style="flex: 1; font-family: monospace; font-size: 0.75rem; padding: 0.5rem;" placeholder="Spreadsheet ID">
-                            <button class="secondary" onclick="updateSpreadsheetId()" style="white-space: nowrap;">Update</button>
-                        </div>
-                        <p id="spreadsheet-id-status" style="font-size: 0.75rem; margin-top: 0.25rem; display: none;"></p>
+                        <input type="text" id="spreadsheet-id" style="width: 24rem; max-width: 100%; font-family: monospace; font-size: 0.75rem; padding: 0.5rem; background: var(--bg-primary); opacity: 0.7; cursor: not-allowed;" placeholder="Spreadsheet ID" readonly>
+                        <p style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">Sign out to change spreadsheet</p>
                     </div>
                     <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
                         <button class="secondary" onclick="confirmOverwriteLocal()">Overwrite Local</button>
@@ -1895,6 +1892,21 @@
                 if (btn.dataset.view === 'reports') loadReport();
             });
         });
+
+        // Handle view URL parameter (e.g., after OAuth redirect)
+        function switchToViewFromURL() {
+            const params = new URLSearchParams(window.location.search);
+            const view = params.get('view');
+            if (view && ['timer', 'reports', 'history', 'settings'].includes(view)) {
+                document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+                document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+                document.querySelector(`nav button[data-view="${view}"]`).classList.add('active');
+                document.getElementById(view + '-view').classList.add('active');
+                // Clear the URL parameter
+                window.history.replaceState({}, '', '/');
+            }
+        }
+        switchToViewFromURL();
 
         // Timer functions
         const circumference = 2 * Math.PI * 120;
@@ -4032,8 +4044,17 @@
             }
         }
 
-        function loginWithGoogle() {
-            const spreadsheetId = document.getElementById('login-spreadsheet-id').value.trim();
+        async function loginWithGoogle() {
+            let spreadsheetId = document.getElementById('login-spreadsheet-id').value.trim();
+
+            // If input is empty, try to get stored spreadsheet ID from IndexedDB
+            if (!spreadsheetId) {
+                const storedId = await Storage.getStoredSpreadsheetId();
+                if (storedId) {
+                    spreadsheetId = storedId;
+                }
+            }
+
             if (spreadsheetId) {
                 // Pass spreadsheet ID as query parameter
                 window.location.href = '/auth/google?spreadsheet_id=' + encodeURIComponent(spreadsheetId);
@@ -4043,10 +4064,21 @@
         }
 
         async function logoutFromGoogle() {
+            // Get spreadsheet ID from SETTINGS (persistent) before logout
+            const spreadsheetId = await Storage.getStoredSpreadsheetId();
+
             await Storage.logout();
             authStatus = { logged_in: false, google_configured: true };
             updateAuthUI();
             await updateStorageIndicator();
+
+            // Populate spreadsheet ID input from SETTINGS (still preserved after logout)
+            if (spreadsheetId) {
+                const input = document.getElementById('login-spreadsheet-id');
+                if (input) {
+                    input.value = spreadsheetId;
+                }
+            }
         }
 
         function updateAuthUI() {
@@ -4061,8 +4093,12 @@
                 document.getElementById('google-name').textContent = authStatus.name || '';
                 document.getElementById('google-email').textContent = authStatus.email || '';
                 document.getElementById('spreadsheet-id').value = authStatus.spreadsheet_id || '';
+                const avatarEl = document.getElementById('google-avatar');
                 if (authStatus.picture) {
-                    document.getElementById('google-avatar').src = authStatus.picture;
+                    avatarEl.src = authStatus.picture;
+                    avatarEl.style.display = 'block';
+                } else {
+                    avatarEl.style.display = 'none';
                 }
                 // Update Google pomodoro count
                 updateGooglePomodoroCount();
@@ -4093,25 +4129,16 @@
             statusEl.textContent = 'Updating...';
 
             try {
-                const res = await fetch('/api/auth/spreadsheet', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ spreadsheet_id: newId })
-                });
-                const data = await res.json();
+                // Update in IndexedDB (SETTINGS store) and sync
+                await Storage.updateSpreadsheetId(newId);
 
-                if (data.error) {
-                    statusEl.style.color = 'var(--accent)';
-                    statusEl.textContent = 'Error: ' + data.error;
-                } else {
-                    statusEl.style.color = 'var(--success)';
-                    statusEl.textContent = '✓ Spreadsheet ID updated';
-                    authStatus.spreadsheet_id = newId;
-                    // Refresh data from new spreadsheet
-                    setTimeout(() => {
-                        statusEl.style.display = 'none';
-                    }, 3000);
-                }
+                statusEl.style.color = 'var(--success)';
+                statusEl.textContent = '✓ Spreadsheet ID updated';
+                authStatus.spreadsheet_id = newId;
+
+                setTimeout(() => {
+                    statusEl.style.display = 'none';
+                }, 3000);
             } catch (e) {
                 statusEl.style.color = 'var(--accent)';
                 statusEl.textContent = 'Error: ' + e.message;
@@ -4161,15 +4188,17 @@
             statusEl.textContent = 'Clearing Google Sheets...';
 
             try {
-                // Clear all rows in Sheets
+                // Clear all pomodoro rows in Sheets
                 const clearRes = await Storage.authenticatedFetch('/api/sheets/clear', { method: 'POST' });
                 if (!clearRes.ok) throw new Error('Failed to clear Sheets');
 
                 statusEl.textContent = 'Uploading local data to Google Sheets...';
 
-                // Upload all local data
+                // Upload all local pomodoros (batch)
                 const result = await Storage.migrateLocalToBackend();
-                await Storage.migrateLocalSettingsToBackend();
+
+                // Replace all settings in Sheet with local IndexedDB settings
+                await Storage.migrateLocalSettingsToBackend(true);
 
                 statusEl.style.color = 'var(--success)';
                 statusEl.textContent = `✓ Replaced Google Sheets with ${result.migrated || 0} pomodoros`;

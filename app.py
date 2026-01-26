@@ -21,7 +21,7 @@ from pathlib import Path
 # Allow OAuth scope changes (users may have previously granted different scopes)
 os.environ["OAUTHLIB_RELAX_TOKEN_SCOPE"] = "1"
 
-from flask import Flask, jsonify, redirect, render_template, request, session, Response
+from flask import Flask, Response, jsonify, redirect, render_template, request, session
 from flask_session import Session
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
@@ -30,7 +30,6 @@ from googleapiclient.errors import HttpError
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 import sheets_storage
-
 
 app = Flask(__name__)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1)
@@ -248,6 +247,7 @@ def get_credentials():
         # Refresh token if expired
         if credentials.expired and credentials.refresh_token:
             from google.auth.transport.requests import Request
+
             credentials.refresh(Request())
 
         return credentials
@@ -461,7 +461,7 @@ def auth_callback():
             new_spreadsheet_id = spreadsheet_id_to_use
             spreadsheet_existed = True
 
-        # Build credentials data for frontend storage
+        # Build credentials data for frontend storage (AUTH store - ephemeral)
         credentials_data = {
             "token": credentials.token,
             "refresh_token": credentials.refresh_token,
@@ -469,10 +469,14 @@ def auth_callback():
             "client_id": credentials.client_id,
             "client_secret": credentials.client_secret,
             "scopes": list(credentials.scopes),
-            "spreadsheet_id": new_spreadsheet_id,
             "user_email": user_email,
             "user_name": user_info.get("name"),
             "user_picture": user_info.get("picture"),
+        }
+
+        # Settings data (SETTINGS store - persistent)
+        settings_data = {
+            "spreadsheet_id": new_spreadsheet_id,
             "spreadsheet_existed": spreadsheet_existed,
         }
 
@@ -488,6 +492,7 @@ def auth_callback():
 <p>Completing login...</p>
 <script>
 const credentials = {json.dumps(credentials_data)};
+const settings = {json.dumps(settings_data)};
 const DB_VERSION = 2;  // Must match storage.js
 
 // Store in IndexedDB
@@ -517,20 +522,31 @@ dbRequest.onupgradeneeded = (e) => {{
 }};
 dbRequest.onsuccess = (e) => {{
     const db = e.target.result;
-    const tx = db.transaction('auth', 'readwrite');
-    const store = tx.objectStore('auth');
-    store.put({{ key: 'credentials', ...credentials }});
-    tx.oncomplete = () => {{
-        window.location.href = '/';
+    // Store auth credentials (ephemeral)
+    const authTx = db.transaction('auth', 'readwrite');
+    authTx.objectStore('auth').put({{ key: 'credentials', ...credentials }});
+    authTx.oncomplete = () => {{
+        // Store settings (persistent) - spreadsheet_id lives here
+        const settingsTx = db.transaction('settings', 'readwrite');
+        const settingsStore = settingsTx.objectStore('settings');
+        settingsStore.put({{ key: 'spreadsheet_id', value: settings.spreadsheet_id, synced: true }});
+        settingsStore.put({{ key: 'spreadsheet_existed', value: settings.spreadsheet_existed, synced: true }});
+        settingsTx.oncomplete = () => {{
+            window.location.href = '/?view=settings';
+        }};
+        settingsTx.onerror = (err) => {{
+            console.error('Settings transaction error:', err);
+            window.location.href = '/?view=settings';
+        }};
     }};
-    tx.onerror = (err) => {{
-        console.error('Transaction error:', err);
-        window.location.href = '/';
+    authTx.onerror = (err) => {{
+        console.error('Auth transaction error:', err);
+        window.location.href = '/?view=settings';
     }};
 }};
 dbRequest.onerror = (e) => {{
     console.error('Failed to open IndexedDB:', e.target.error);
-    window.location.href = '/';
+    window.location.href = '/?view=settings';
 }};
 </script>
 </body>
@@ -583,8 +599,8 @@ def update_spreadsheet():
     if not is_logged_in():
         return jsonify({"error": "Not logged in"}), HTTPStatus.UNAUTHORIZED
 
-    data = request.json
-    new_id = data.get("spreadsheet_id", "").strip()
+    request_body = request.json
+    new_id = request_body.get("spreadsheet_id", "").strip()
     if not new_id:
         return jsonify({"error": "Spreadsheet ID is required"}), HTTPStatus.BAD_REQUEST
 
@@ -637,7 +653,7 @@ def proxy_get_pomodoro_count():
         service = get_sheets_service()
         spreadsheet_id = get_spreadsheet_id_from_request()
         # Only fetch the ID column to count rows efficiently
-        result = (
+        sheets_response = (
             service.spreadsheets()
             .values()
             .get(
@@ -646,7 +662,7 @@ def proxy_get_pomodoro_count():
             )
             .execute()
         )
-        rows = result.get("values", [])
+        rows = sheets_response.get("values", [])
         # Subtract 1 for header row, ensure non-negative
         count = max(0, len(rows) - 1)
         return jsonify({"count": count})
@@ -656,10 +672,10 @@ def proxy_get_pomodoro_count():
 
 def get_request_data():
     """Get request JSON data, stripping _credentials if present."""
-    data = request.json
-    if data and "_credentials" in data:
-        data = {k: v for k, v in data.items() if k != "_credentials"}
-    return data
+    request_body = request.json
+    if request_body and "_credentials" in request_body:
+        request_body = {k: v for k, v in request_body.items() if k != "_credentials"}
+    return request_body
 
 
 @app.route("/api/sheets/pomodoros", methods=["POST"])
@@ -682,7 +698,34 @@ def proxy_create_pomodoro():
         return jsonify({"error": str(e)}), HTTPStatus.INTERNAL_SERVER_ERROR
     except Exception as e:
         import traceback
+
         app.logger.error(f"Error in proxy_create_pomodoro: {e}\n{traceback.format_exc()}")
+        return jsonify({"error": str(e)}), HTTPStatus.INTERNAL_SERVER_ERROR
+
+
+@app.route("/api/sheets/pomodoros/batch", methods=["POST"])
+def proxy_create_pomodoros_batch():
+    """Batch upload pomodoros to Google Sheets - stateless."""
+    if not is_logged_in():
+        return jsonify({"error": "Not logged in"}), HTTPStatus.UNAUTHORIZED
+
+    try:
+        service = get_sheets_service()
+        if not service:
+            return jsonify({"error": "Failed to create Sheets service"}), HTTPStatus.UNAUTHORIZED
+        spreadsheet_id = get_spreadsheet_id_from_request()
+        if not spreadsheet_id:
+            return jsonify({"error": "No spreadsheet ID provided"}), HTTPStatus.BAD_REQUEST
+        data = get_request_data()
+        pomodoros = data.get("pomodoros", [])
+        count = sheets_storage.save_pomodoros_batch(service, spreadsheet_id, pomodoros)
+        return jsonify({"status": "ok", "count": count})
+    except HttpError as e:
+        return jsonify({"error": str(e)}), HTTPStatus.INTERNAL_SERVER_ERROR
+    except Exception as e:
+        import traceback
+
+        app.logger.error(f"Error in proxy_create_pomodoros_batch: {e}\n{traceback.format_exc()}")
         return jsonify({"error": str(e)}), HTTPStatus.INTERNAL_SERVER_ERROR
 
 
@@ -745,8 +788,13 @@ def proxy_save_settings():
     try:
         service = get_sheets_service()
         spreadsheet_id = get_spreadsheet_id_from_request()
-        settings = get_request_data()
-        sheets_storage.save_settings(service, spreadsheet_id, settings)
+        data = get_request_data()
+        # Check for replace_all flag (used by "Overwrite Google" button)
+        replace_all = data.pop("_replace_all", False) if isinstance(data, dict) else False
+        print(
+            f"DEBUG settings: replace_all={replace_all}, timer_preset_1={data.get('timer_preset_1')}, num_keys={len(data) if data else 0}"
+        )
+        sheets_storage.save_settings(service, spreadsheet_id, data, replace_all=replace_all)
         return jsonify({"status": "ok"})
     except HttpError as e:
         return jsonify({"error": str(e)}), HTTPStatus.INTERNAL_SERVER_ERROR
@@ -761,8 +809,8 @@ def proxy_deduplicate_pomodoros():
     try:
         service = get_sheets_service()
         spreadsheet_id = get_spreadsheet_id_from_request()
-        result = sheets_storage.deduplicate_pomodoros(service, spreadsheet_id)
-        return jsonify(result)
+        dedup_result = sheets_storage.deduplicate_pomodoros(service, spreadsheet_id)
+        return jsonify(dedup_result)
     except HttpError as e:
         return jsonify({"error": str(e)}), HTTPStatus.INTERNAL_SERVER_ERROR
 
@@ -818,10 +866,7 @@ def proxy_clear_sheets():
             return jsonify({"error": "Pomodoros sheet not found"}), HTTPStatus.NOT_FOUND
 
         # Get current row count
-        values = service.spreadsheets().values().get(
-            spreadsheetId=spreadsheet_id,
-            range="Pomodoros!A:A"
-        ).execute()
+        values = service.spreadsheets().values().get(spreadsheetId=spreadsheet_id, range="Pomodoros!A:A").execute()
         row_count = len(values.get("values", []))
 
         if row_count <= 1:
@@ -832,17 +877,19 @@ def proxy_clear_sheets():
         service.spreadsheets().batchUpdate(
             spreadsheetId=spreadsheet_id,
             body={
-                "requests": [{
-                    "deleteDimension": {
-                        "range": {
-                            "sheetId": pomodoros_sheet_id,
-                            "dimension": "ROWS",
-                            "startIndex": 1,  # After header
-                            "endIndex": row_count
+                "requests": [
+                    {
+                        "deleteDimension": {
+                            "range": {
+                                "sheetId": pomodoros_sheet_id,
+                                "dimension": "ROWS",
+                                "startIndex": 1,  # After header
+                                "endIndex": row_count,
+                            }
                         }
                     }
-                }]
-            }
+                ]
+            },
         ).execute()
 
         return jsonify({"status": "ok", "cleared": row_count - 1})
