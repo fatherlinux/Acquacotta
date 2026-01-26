@@ -20,16 +20,55 @@ All work must align with these principles (in priority order):
 2. **User Data Ownership** - Data lives in user's Google Sheets, not our servers
 3. **Simplicity & Focus** - Pomodoro timer and time tracking only, no feature creep
 4. **Timer Agnosticism** - Internal timer and external physical timers are equally supported
-5. **Offline-First** - SQLite cache for all reads, background sync to Google Sheets
+5. **Offline-First** - IndexedDB cache for all reads, background sync to Google Sheets
 6. **Container-Ready** - Single container, env var config, no persistent volumes
 
 ## Technology Stack
 
 - **Backend**: Python 3.x / Flask
 - **Frontend**: Vanilla HTML/CSS/JavaScript (no build step)
-- **Local Storage**: SQLite
+- **Local Storage**: IndexedDB (browser-side)
 - **Cloud Storage**: Google Sheets API v4
-- **Auth**: Google OAuth 2.0
+- **Auth**: Google OAuth 2.0 (credentials stored in IndexedDB, server is stateless)
+
+## Local Development
+
+### Container Names (Standardized)
+
+Always use these exact names for local development:
+
+- **Image**: `acquacotta:dev`
+- **Container**: `acquacotta-dev`
+
+### Build and Run Commands
+
+```bash
+# Build the dev image
+podman build -t acquacotta:dev .
+
+# Stop and remove existing container, then run new one
+# Note: Map host port 5000 to container port 80 (Apache reverse proxy)
+podman stop acquacotta-dev 2>/dev/null; podman rm acquacotta-dev 2>/dev/null
+podman run -d --name acquacotta-dev -p 5000:80 --env-file .env acquacotta:dev
+
+# View logs
+podman logs acquacotta-dev
+
+# One-liner for rebuild and restart
+podman build -t acquacotta:dev . && podman stop acquacotta-dev 2>/dev/null; podman rm acquacotta-dev 2>/dev/null; podman run -d --name acquacotta-dev -p 5000:80 --env-file .env acquacotta:dev
+```
+
+### Environment Variables (.env)
+
+Required for local development:
+```
+FLASK_ENV=development
+FLASK_SECRET_KEY=dev-secret-key-not-for-production
+SESSION_COOKIE_SECURE=false
+OAUTH_REDIRECT_BASE=http://localhost:5000
+GOOGLE_CLIENT_ID=<your-client-id>
+GOOGLE_CLIENT_SECRET=<your-client-secret>
+```
 
 ## Before Making Changes
 

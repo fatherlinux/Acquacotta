@@ -1,14 +1,17 @@
-"""Pytest fixtures for Acquacotta tests."""
+"""Pytest fixtures for Acquacotta tests.
+
+Sovereign Sandbox v2: Tests for stateless server architecture.
+The server only handles OAuth and proxies requests to Google Sheets.
+All data storage happens in the browser's IndexedDB.
+"""
 
 import os
-import sqlite3
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 # Set environment variables before importing app
 os.environ["FLASK_SECRET_KEY"] = "test-secret-key"
-os.environ["CLEAR_CACHE_ON_START"] = "false"
 
 import app as app_module
 
@@ -24,45 +27,25 @@ def temp_data_dir(tmp_path):
 @pytest.fixture
 def app(temp_data_dir):
     """Create and configure a test Flask application."""
-    # Patch DATA_DIR before creating the app instance
+    # Patch DATA_DIR for the session storage
     with patch.object(app_module, "DATA_DIR", temp_data_dir):
-        with patch.object(app_module, "DEFAULT_DB_PATH", temp_data_dir / "test.db"):
-            # Reinitialize the database with the test path
-            app_module.init_db(temp_data_dir / "test.db")
+        test_app = app_module.app
+        test_app.config.update(
+            {
+                "TESTING": True,
+                "SECRET_KEY": "test-secret-key",
+                "SESSION_TYPE": "filesystem",
+                "SESSION_FILE_DIR": str(temp_data_dir / "sessions"),
+            }
+        )
 
-            test_app = app_module.app
-            test_app.config.update(
-                {
-                    "TESTING": True,
-                    "SECRET_KEY": "test-secret-key",
-                    "SESSION_TYPE": "filesystem",
-                    "SESSION_FILE_DIR": str(temp_data_dir / "sessions"),
-                }
-            )
-
-            yield test_app
+        yield test_app
 
 
 @pytest.fixture
 def client(app):
     """Create a test client for the Flask application."""
     return app.test_client()
-
-
-@pytest.fixture
-def db_path(temp_data_dir):
-    """Return the test database path."""
-    return temp_data_dir / "test.db"
-
-
-@pytest.fixture
-def test_db(db_path):
-    """Create a test database with schema initialized."""
-    app_module.init_db(db_path)
-    conn = sqlite3.connect(db_path)
-    conn.row_factory = sqlite3.Row
-    yield conn
-    conn.close()
 
 
 @pytest.fixture

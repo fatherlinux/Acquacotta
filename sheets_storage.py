@@ -50,7 +50,27 @@ def get_pomodoros(sheets_service, spreadsheet_id, start_date=None, end_date=None
 
 
 def save_pomodoro(sheets_service, spreadsheet_id, pomodoro):
-    """Save a new pomodoro to Google Sheets."""
+    """Save a new pomodoro to Google Sheets (with duplicate check)."""
+    # First check if this ID already exists to prevent duplicates
+    id_lookup = (
+        sheets_service.spreadsheets()
+        .values()
+        .get(
+            spreadsheetId=spreadsheet_id,
+            range="Pomodoros!A:A",
+        )
+        .execute()
+    )
+
+    existing_ids = id_lookup.get("values", [])
+    pomodoro_id = pomodoro["id"]
+
+    for row in existing_ids:
+        if row and row[0] == pomodoro_id:
+            # ID already exists, skip insert (could also update here)
+            return False
+
+    # ID doesn't exist, append new row
     sheets_service.spreadsheets().values().append(
         spreadsheetId=spreadsheet_id,
         range="Pomodoros!A:G",
@@ -59,7 +79,7 @@ def save_pomodoro(sheets_service, spreadsheet_id, pomodoro):
         body={
             "values": [
                 [
-                    pomodoro["id"],
+                    pomodoro_id,
                     pomodoro["name"],
                     pomodoro["type"],
                     pomodoro["start_time"],
@@ -70,26 +90,48 @@ def save_pomodoro(sheets_service, spreadsheet_id, pomodoro):
             ]
         },
     ).execute()
+    return True
 
 
 def save_pomodoros_batch(sheets_service, spreadsheet_id, pomodoros):
-    """Save multiple pomodoros to Google Sheets in a single request."""
+    """Save multiple pomodoros to Google Sheets in a single request (with duplicate check)."""
     if not pomodoros:
-        return
+        return 0
 
+    # First get all existing IDs
+    id_lookup = (
+        sheets_service.spreadsheets()
+        .values()
+        .get(
+            spreadsheetId=spreadsheet_id,
+            range="Pomodoros!A:A",
+        )
+        .execute()
+    )
+
+    existing_ids = set()
+    for row in id_lookup.get("values", []):
+        if row:
+            existing_ids.add(row[0])
+
+    # Filter out pomodoros that already exist
     rows = []
     for p in pomodoros:
-        rows.append(
-            [
-                p["id"],
-                p["name"],
-                p["type"],
-                p["start_time"],
-                p["end_time"],
-                p["duration_minutes"],
-                p.get("notes") or "",
-            ]
-        )
+        if p["id"] not in existing_ids:
+            rows.append(
+                [
+                    p["id"],
+                    p["name"],
+                    p["type"],
+                    p["start_time"],
+                    p["end_time"],
+                    p["duration_minutes"],
+                    p.get("notes") or "",
+                ]
+            )
+
+    if not rows:
+        return 0
 
     sheets_service.spreadsheets().values().append(
         spreadsheetId=spreadsheet_id,
@@ -98,6 +140,7 @@ def save_pomodoros_batch(sheets_service, spreadsheet_id, pomodoros):
         insertDataOption="INSERT_ROWS",
         body={"values": rows},
     ).execute()
+    return len(rows)
 
 
 def update_pomodoro(sheets_service, spreadsheet_id, pomodoro_id, update_fields):
@@ -238,6 +281,80 @@ def get_settings(sheets_service, spreadsheet_id, defaults):
             settings[key] = value
 
     return settings
+
+
+def deduplicate_pomodoros(sheets_service, spreadsheet_id):
+    """Remove duplicate pomodoros from Google Sheets (keeps first occurrence of each ID).
+
+    Returns:
+        dict: {'removed': count_removed, 'total': total_rows}
+    """
+    # Get all pomodoros with their row indices
+    id_lookup = (
+        sheets_service.spreadsheets()
+        .values()
+        .get(
+            spreadsheetId=spreadsheet_id,
+            range="Pomodoros!A:A",
+        )
+        .execute()
+    )
+
+    rows = id_lookup.get("values", [])
+
+    # Track seen IDs and rows to delete (0-indexed)
+    seen_ids = set()
+    rows_to_delete = []
+
+    for i, row in enumerate(rows):
+        if i == 0:
+            # Skip header row
+            continue
+        if row:
+            pomodoro_id = row[0]
+            if pomodoro_id in seen_ids:
+                rows_to_delete.append(i)
+            else:
+                seen_ids.add(pomodoro_id)
+
+    if not rows_to_delete:
+        return {"removed": 0, "total": len(rows) - 1}  # -1 for header
+
+    # Get sheet ID
+    spreadsheet = sheets_service.spreadsheets().get(spreadsheetId=spreadsheet_id).execute()
+
+    sheet_id = None
+    for sheet in spreadsheet["sheets"]:
+        if sheet["properties"]["title"] == "Pomodoros":
+            sheet_id = sheet["properties"]["sheetId"]
+            break
+
+    if sheet_id is None:
+        return {"removed": 0, "total": len(rows) - 1, "error": "Pomodoros sheet not found"}
+
+    # Delete rows in reverse order (so indices don't shift)
+    rows_to_delete.reverse()
+
+    requests = []
+    for row_index in rows_to_delete:
+        requests.append({
+            "deleteDimension": {
+                "range": {
+                    "sheetId": sheet_id,
+                    "dimension": "ROWS",
+                    "startIndex": row_index,
+                    "endIndex": row_index + 1,
+                }
+            }
+        })
+
+    # Execute batch delete
+    sheets_service.spreadsheets().batchUpdate(
+        spreadsheetId=spreadsheet_id,
+        body={"requests": requests},
+    ).execute()
+
+    return {"removed": len(rows_to_delete), "total": len(rows) - 1 - len(rows_to_delete)}
 
 
 def save_settings(sheets_service, spreadsheet_id, settings_data):

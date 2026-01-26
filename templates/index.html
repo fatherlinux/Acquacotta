@@ -456,6 +456,7 @@
         }
     </style>
     <script src="{{ url_for('static', filename='js/utils.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/storage.js') }}"></script>
 </head>
 <body>
     <div class="container">
@@ -467,9 +468,15 @@
                     <div style="font-size: 0.75rem; color: var(--text-secondary); line-height: 1; margin: 0;">Pomodoro Tracker</div>
                 </div>
             </div>
-            <div id="clock-display" style="text-align: right;">
-                <div id="clock-time" style="font-size: 1.25rem; font-weight: 400; font-variant-numeric: tabular-nums; color: var(--text-primary); line-height: 1; margin: 0;"></div>
-                <div id="clock-date" style="font-size: 0.75rem; color: var(--text-secondary); line-height: 1; margin: 0;"></div>
+            <div style="display: flex; align-items: center; gap: 1rem;">
+                <div id="storage-indicator" style="display: none; font-size: 0.625rem; color: var(--text-secondary); text-align: right;" title="Your data is stored locally on this device only">
+                    <span id="storage-indicator-dot" style="display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #f59e0b; margin-right: 4px; vertical-align: middle;"></span>
+                    <span id="storage-mode-text">Local Storage</span>
+                </div>
+                <div id="clock-display" style="text-align: right;">
+                    <div id="clock-time" style="font-size: 1.25rem; font-weight: 400; font-variant-numeric: tabular-nums; color: var(--text-primary); line-height: 1; margin: 0;"></div>
+                    <div id="clock-date" style="font-size: 0.75rem; color: var(--text-secondary); line-height: 1; margin: 0;"></div>
+                </div>
             </div>
         </header>
         <nav>
@@ -596,7 +603,7 @@
         <div id="reports-view" class="view">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
                 <h2>Reports</h2>
-                <a href="/api/export" class="secondary" style="text-decoration:none; display:inline-block; padding:0.75rem 1.5rem; background:var(--bg-tertiary); border-radius:8px; color:var(--text-primary);">Export CSV</a>
+                <button class="secondary" onclick="exportData()">Export CSV</button>
             </div>
             <div class="period-selector">
                 <button data-period="day">Day</button>
@@ -644,7 +651,14 @@
                     <p style="color: var(--text-secondary); font-size: 0.875rem; margin-bottom: 1rem;">
                         Your data is stored locally by default. Optionally sign in with Google to sync your data to Google Sheets.
                     </p>
-                    <button class="primary" onclick="window.location.href='/auth/google'" id="google-login-btn">
+                    <div style="margin-bottom: 1rem;">
+                        <label for="login-spreadsheet-id" style="font-size: 0.875rem; color: var(--text-secondary); display: block; margin-bottom: 0.25rem;">Existing Spreadsheet ID (optional):</label>
+                        <input type="text" id="login-spreadsheet-id" style="width: 20rem; max-width: 100%; font-family: monospace; font-size: 0.75rem; padding: 0.5rem;" placeholder="Leave blank to create new">
+                        <p style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">
+                            Find this in your Google Sheets URL: docs.google.com/spreadsheets/d/<strong>[ID]</strong>/edit
+                        </p>
+                    </div>
+                    <button class="primary" onclick="loginWithGoogle()" id="google-login-btn">
                         Sign in with Google
                     </button>
                     <p id="google-not-configured" style="color: var(--text-secondary); font-size: 0.875rem; margin-top: 0.5rem; display: none;">
@@ -663,6 +677,10 @@
                         ✓ Data synced to Google Sheets
                     </p>
                     <div style="margin-bottom: 1rem;">
+                        <span style="font-size: 0.875rem; color: var(--text-secondary);">Pomodoros stored: </span>
+                        <span id="google-pomodoro-count" style="font-weight: 500; color: var(--accent);">0</span>
+                    </div>
+                    <div style="margin-bottom: 1rem;">
                         <label for="spreadsheet-id" style="font-size: 0.875rem; color: var(--text-secondary); display: block; margin-bottom: 0.25rem;">Spreadsheet ID:</label>
                         <div style="display: flex; gap: 0.5rem;">
                             <input type="text" id="spreadsheet-id" style="flex: 1; font-family: monospace; font-size: 0.75rem; padding: 0.5rem;" placeholder="Spreadsheet ID">
@@ -671,12 +689,29 @@
                         <p id="spreadsheet-id-status" style="font-size: 0.75rem; margin-top: 0.25rem; display: none;"></p>
                     </div>
                     <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                        <button class="secondary" onclick="refreshFromSheets()">Refresh Data</button>
-                        <button class="secondary" onclick="migrateData()">Migrate Local Data</button>
-                        <button class="secondary" onclick="window.location.href='/auth/logout'">Sign Out</button>
+                        <button class="secondary" onclick="confirmOverwriteLocal()">Overwrite Local</button>
+                        <button class="secondary" onclick="confirmOverwriteGoogle()">Overwrite Google</button>
+                        <button class="secondary" onclick="logoutFromGoogle()">Sign Out</button>
                     </div>
                     <p id="migrate-status" style="font-size: 0.875rem; margin-top: 0.5rem; display: none;"></p>
                 </div>
+            </div>
+            <div class="card" id="local-data-card" style="display: none;">
+                <h3>Local Data</h3>
+                <p style="color: var(--text-secondary); font-size: 0.875rem; margin-bottom: 1rem;">
+                    Your data is stored locally on this device. Sign in with Google to sync across devices.
+                </p>
+                <div style="margin-bottom: 1rem;">
+                    <span style="font-size: 0.875rem; color: var(--text-secondary);">Pomodoros stored: </span>
+                    <span id="local-pomodoro-count" style="font-weight: 500; color: var(--accent);">0</span>
+                </div>
+                <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                    <button class="secondary" onclick="downloadLocalData()">Download CSV</button>
+                    <button class="secondary" onclick="document.getElementById('csv-upload-input').click()">Upload CSV</button>
+                    <input type="file" id="csv-upload-input" accept=".csv" style="display: none;" onchange="uploadCSV(this)">
+                    <button class="secondary" onclick="confirmClearLocalData()" style="color: #ef4444;">Clear All Data</button>
+                </div>
+                <p id="local-data-status" style="font-size: 0.875rem; margin-top: 0.5rem; display: none;"></p>
             </div>
             <div class="card">
                 <h3>Timer Presets</h3>
@@ -936,6 +971,44 @@
             <p id="sync-modal-desc" style="color: var(--text-secondary); font-size: 0.875rem; margin-bottom: 1rem;"></p>
             <p id="sync-counts" style="font-size: 0.875rem; margin-bottom: 1rem;"></p>
             <div id="sync-modal-actions" class="modal-actions"></div>
+        </div>
+    </div>
+
+    <!-- Local Data Migration Modal (shown on login when localStorage has data) -->
+    <div id="local-migration-modal" class="modal-overlay">
+        <div class="modal">
+            <h2>Upload Local Data?</h2>
+            <p style="color: var(--text-secondary); font-size: 0.875rem; margin-bottom: 1rem;">
+                You have pomodoros stored locally from before you logged in.
+            </p>
+            <p id="local-migration-count" style="font-size: 0.875rem; margin-bottom: 1rem; color: var(--accent);">
+                Found 0 pomodoros in local storage.
+            </p>
+            <p style="color: var(--text-secondary); font-size: 0.875rem; margin-bottom: 1rem;">
+                Would you like to upload them to Google Sheets?
+            </p>
+            <div class="modal-actions">
+                <button class="secondary" onclick="discardLocalMigration()">No, Discard</button>
+                <button class="primary" onclick="performLocalMigration()">Yes, Upload</button>
+            </div>
+            <p id="local-migration-status" style="font-size: 0.875rem; margin-top: 0.5rem; display: none;"></p>
+        </div>
+    </div>
+
+    <!-- Clear Local Data Confirmation Modal -->
+    <div id="clear-data-modal" class="modal-overlay">
+        <div class="modal">
+            <h2>Clear All Local Data?</h2>
+            <p style="color: var(--text-secondary); font-size: 0.875rem; margin-bottom: 1rem;">
+                This will permanently delete all your locally stored pomodoros and settings.
+            </p>
+            <p style="color: #ef4444; font-size: 0.875rem; margin-bottom: 1rem;">
+                This action cannot be undone.
+            </p>
+            <div class="modal-actions">
+                <button class="secondary" onclick="hideClearDataModal()">Cancel</button>
+                <button class="primary" onclick="clearLocalDataConfirmed()" style="background: #ef4444;">Clear All Data</button>
+            </div>
         </div>
     </div>
 
@@ -1394,8 +1467,7 @@
             const endISO = endOfWeek.toISOString();
 
             try {
-                const res = await fetch(`/api/pomodoros?start_date=${startISO}&end_date=${endISO}`);
-                const pomodoros = await res.json();
+                const pomodoros = await Storage.getPomodoros(startISO, endISO);
                 renderWeeklyGrid(pomodoros, startOfWeek, tz, sundayFirst);
                 renderWeeklySummary(pomodoros);
             } catch (e) {
@@ -1541,8 +1613,7 @@
             const dayEnd = new Date(dayStr + 'T23:59:59');
 
             try {
-                const res = await fetch(`/api/pomodoros?start_date=${dayStart.toISOString()}&end_date=${dayEnd.toISOString()}`);
-                const existingPomos = await res.json();
+                const existingPomos = await Storage.getPomodoros(dayStart.toISOString(), dayEnd.toISOString());
 
                 // Find occupied time ranges
                 const occupied = existingPomos.map(p => ({
@@ -1578,22 +1649,18 @@
 
                 const endTime = new Date(freeSlotStart.getTime() + duration * 60 * 1000);
 
-                // Create the pomodoro using the manual endpoint
-                const response = await fetch('/api/pomodoros/manual', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        type: type,
-                        name: name,
-                        start_time: freeSlotStart.toISOString(),
-                        end_time: endTime.toISOString(),
-                        duration_minutes: duration
-                    })
+                // Create the pomodoro using Storage
+                await Storage.createManualPomodoro({
+                    type: type,
+                    name: name,
+                    start_time: freeSlotStart.toISOString(),
+                    end_time: endTime.toISOString(),
+                    duration_minutes: duration
                 });
 
-                if (response.ok) {
-                    await loadWeeklyOverview();
-                }
+                await loadWeeklyOverview();
+                updateLocalPomodoroCount();
+                if (authStatus.logged_in) updateGooglePomodoroCount();
             } catch (e) {
                 console.error('Error adding pomodoro:', e);
             }
@@ -1607,13 +1674,10 @@
             const latestId = ids[0];
 
             try {
-                const response = await fetch(`/api/pomodoros/${latestId}`, {
-                    method: 'DELETE'
-                });
-
-                if (response.ok) {
-                    await loadWeeklyOverview();
-                }
+                await Storage.deletePomodoro(latestId);
+                await loadWeeklyOverview();
+                updateLocalPomodoroCount();
+                if (authStatus.logged_in) updateGooglePomodoroCount();
             } catch (e) {
                 console.error('Error deleting pomodoro:', e);
             }
@@ -1642,8 +1706,7 @@
             const dayEnd = new Date(dayStr + 'T23:59:59');
 
             try {
-                const res = await fetch(`/api/pomodoros?start_date=${dayStart.toISOString()}&end_date=${dayEnd.toISOString()}`);
-                const existingPomos = await res.json();
+                const existingPomos = await Storage.getPomodoros(dayStart.toISOString(), dayEnd.toISOString());
 
                 // Find occupied time ranges
                 const occupied = existingPomos.map(p => ({
@@ -2154,19 +2217,17 @@
         async function savePomodoro() {
             const name = document.getElementById('timer-pomo-name').value.trim();
 
-            await fetch('/api/pomodoros', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    name,
-                    type: document.getElementById('timer-pomo-type').value,
-                    duration_minutes: Math.round(totalSeconds / 60),
-                    notes: document.getElementById('timer-pomo-notes').value.trim() || null
-                })
+            await Storage.createPomodoro({
+                name,
+                type: document.getElementById('timer-pomo-type').value,
+                duration_minutes: Math.round(totalSeconds / 60),
+                notes: document.getElementById('timer-pomo-notes').value.trim() || null
             });
 
             // Keep fields visible during break (stored in lastPomodoro for auto-start)
             loadWeeklyOverview(); // Refresh weekly view
+            updateLocalPomodoroCount();
+            if (authStatus.logged_in) updateGooglePomodoroCount();
             return true;
         }
 
@@ -2380,8 +2441,7 @@
         async function loadHistory() {
             const list = document.getElementById('history-list');
             try {
-                const res = await fetch('/api/pomodoros');
-                const pomodoros = await res.json();
+                const pomodoros = await Storage.getPomodoros();
 
                 if (!Array.isArray(pomodoros) || pomodoros.length === 0) {
                     list.innerHTML = '<div class="empty">No pomodoros yet. Start your first timer!</div>';
@@ -2468,8 +2528,11 @@
         }
 
         async function deletePomodoro(id) {
-            await fetch(`/api/pomodoros/${id}`, { method: 'DELETE' });
+            await Storage.deletePomodoro(id);
             loadHistory();
+            loadWeeklyOverview();
+            updateLocalPomodoroCount();
+            if (authStatus.logged_in) updateGooglePomodoroCount();
         }
 
         let existingPomodoros = []; // Cache for conflict checking
@@ -2517,7 +2580,7 @@
             document.getElementById('add-modal').classList.add('active');
 
             // Load existing pomodoros for conflict checking
-            fetch('/api/pomodoros').then(r => r.json()).then(p => existingPomodoros = p);
+            Storage.getPomodoros().then(p => existingPomodoros = p);
         }
 
         function showAddModalForDate(dateStr) {
@@ -2539,7 +2602,7 @@
             document.getElementById('add-modal').classList.add('active');
 
             // Load existing pomodoros for conflict checking
-            fetch('/api/pomodoros').then(r => r.json()).then(p => existingPomodoros = p);
+            Storage.getPomodoros().then(p => existingPomodoros = p);
         }
 
         function hideAddModal() {
@@ -2695,16 +2758,12 @@
 
                 // Create all pomodoros
                 for (const slot of slots) {
-                    await fetch('/api/pomodoros/manual', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            name,
-                            type,
-                            start_time: slot.start.toISOString(),
-                            end_time: slot.end.toISOString(),
-                            duration_minutes: duration
-                        })
+                    await Storage.createManualPomodoro({
+                        name,
+                        type,
+                        start_time: slot.start.toISOString(),
+                        end_time: slot.end.toISOString(),
+                        duration_minutes: duration
                     });
                 }
 
@@ -2714,6 +2773,8 @@
                 document.getElementById('add-error').style.display = 'none';
                 await loadHistory();
                 loadWeeklyOverview();
+                updateLocalPomodoroCount();
+                if (authStatus.logged_in) updateGooglePomodoroCount();
             } catch (e) {
                 console.error('Error adding manual pomodoro:', e);
                 document.getElementById('add-error').textContent = 'Error adding entry: ' + e.message;
@@ -2738,8 +2799,7 @@
 
         async function showEditModal(id) {
             // Fetch all pomodoros to find the one to edit
-            const res = await fetch('/api/pomodoros');
-            allPomodoros = await res.json();
+            allPomodoros = await Storage.getPomodoros();
             const pomo = allPomodoros.find(p => p.id === id);
             if (!pomo) {
                 alert('Pomodoro not found');
@@ -2783,17 +2843,13 @@
             const startTime = new Date(`${dateStr}T${time}`);
             const endTime = new Date(startTime.getTime() + duration * 60000);
 
-            await fetch(`/api/pomodoros/${id}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    name,
-                    type: document.getElementById('edit-type').value,
-                    start_time: startTime.toISOString(),
-                    end_time: endTime.toISOString(),
-                    duration_minutes: duration,
-                    notes: document.getElementById('edit-notes').value.trim() || null
-                })
+            await Storage.updatePomodoro(id, {
+                name,
+                type: document.getElementById('edit-type').value,
+                start_time: startTime.toISOString(),
+                end_time: endTime.toISOString(),
+                duration_minutes: duration,
+                notes: document.getElementById('edit-notes').value.trim() || null
             });
 
             hideEditModal();
@@ -2828,8 +2884,7 @@
 
         async function loadReport() {
             const dateRange = getDateRange(currentPeriod, currentDate);
-            const res = await fetch(`/api/reports/${currentPeriod}?start_date=${encodeURIComponent(dateRange.start)}&end_date=${encodeURIComponent(dateRange.end)}`);
-            const data = await res.json();
+            const data = await Storage.getReport(currentPeriod, dateRange.start, dateRange.end, currentDate);
 
             // Update summary
             document.getElementById('report-count').textContent = data.total_pomodoros;
@@ -2930,8 +2985,7 @@
             });
 
             // Fetch raw pomodoros for this period to build stacked chart
-            const pomosRes = await fetch(`/api/pomodoros?start_date=${dateRange.start}&end_date=${dateRange.end}`);
-            const pomos = await pomosRes.json();
+            const pomos = await Storage.getPomodoros(dateRange.start, dateRange.end);
 
             // Get all unique types that have data
             const typesInPeriod = [...new Set(pomos.map(p => p.type))];
@@ -3055,8 +3109,7 @@
 
         // Settings
         async function loadSettings() {
-            const res = await fetch('/api/settings');
-            settings = await res.json();
+            settings = await Storage.getSettings();
 
             // Pomodoro types (ensure it's an array)
             if (!settings.pomodoro_types || !Array.isArray(settings.pomodoro_types)) {
@@ -3469,11 +3522,7 @@
         }
 
         async function autoSaveSettings() {
-            await fetch('/api/settings', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(settings)
-            });
+            await Storage.saveSettings(settings);
         }
 
         function addNewType() {
@@ -3507,32 +3556,356 @@
         let authStatus = { logged_in: false };
 
         async function checkAuthStatus() {
-            const res = await fetch('/api/auth/status');
-            authStatus = await res.json();
-            updateAuthUI();
+            // Check if Google OAuth is configured (still need to ask server this)
+            let googleConfigured = true;
+            try {
+                const res = await fetch('/api/auth/status');
+                const serverStatus = await res.json();
+                googleConfigured = serverStatus.google_configured;
+            } catch (e) {
+                console.error('Failed to check auth config:', e);
+            }
 
-            if (authStatus.logged_in) {
-                // If needs initial sync, show sync options modal (for shared cache migration, etc.)
-                if (authStatus.needs_initial_sync) {
-                    await showInitialSyncModal();
-                }
-                // Always refresh from Google Sheets after any modal handling
-                try {
-                    await fetch('/api/sync/now', { method: 'POST' });
-                } catch (e) {
-                    console.error('Failed to sync from Google Sheets:', e);
+            // Initialize Storage - this loads credentials from IndexedDB
+            await Storage.init({ google_configured: googleConfigured });
+
+            // Get auth status from Storage (based on IndexedDB credentials)
+            authStatus = Storage.getAuthStatus();
+
+            // Migrate any data from old localStorage to IndexedDB
+            await Storage.migrateFromLocalStorage();
+
+            // Auto-fill spreadsheet ID if user has one stored (for re-login)
+            if (!authStatus.logged_in) {
+                const storedSpreadsheetId = await Storage.getStoredSpreadsheetId();
+                if (storedSpreadsheetId) {
+                    const input = document.getElementById('login-spreadsheet-id');
+                    if (input) {
+                        input.value = storedSpreadsheetId;
+                    }
                 }
             }
 
-            // Always load settings (works with SQLite locally or Google Sheets when logged in)
+            updateAuthUI();
+            await updateStorageIndicator();
+
+            if (authStatus.logged_in) {
+                // Check if there's IndexedDB data that needs to be migrated to Sheets
+                const hasData = await Storage.hasLocalData();
+                const syncStatus = Storage.getSyncStatus();
+                if (hasData && syncStatus.pending > 0) {
+                    await showLocalMigrationModal();
+                }
+
+                // If needs initial sync, sync from Sheets to IndexedDB
+                if (authStatus.needs_initial_sync) {
+                    await showInitialSyncModal();
+                }
+            }
+
+            // Always load settings (from IndexedDB)
             await loadSettings();
         }
 
-        async function showInitialSyncModal() {
-            // Check data counts from both sources BEFORE syncing anything
+        // Update storage mode indicator in header
+        async function updateStorageIndicator() {
+            const indicator = document.getElementById('storage-indicator');
+            const indicatorDot = document.getElementById('storage-indicator-dot');
+            const modeText = document.getElementById('storage-mode-text');
+            const localDataCard = document.getElementById('local-data-card');
+
+            if (Storage.isLocalMode()) {
+                indicator.style.display = 'block';
+                indicatorDot.style.background = '#f59e0b'; // Orange for local only
+                modeText.textContent = 'Local Storage';
+                indicator.title = 'Your data is stored locally on this device only';
+
+                // Show local data card in settings
+                localDataCard.style.display = 'block';
+                await updateLocalPomodoroCount();
+            } else {
+                // When logged in, show sync status
+                const syncStatus = Storage.getSyncStatus();
+                indicator.style.display = 'block';
+
+                if (!syncStatus.online) {
+                    indicatorDot.style.background = '#ef4444'; // Red for offline
+                    modeText.textContent = 'Offline';
+                    indicator.title = 'You are offline. Changes will sync when connected.';
+                } else if (syncStatus.pending > 0 || syncStatus.syncing) {
+                    indicatorDot.style.background = '#3b82f6'; // Blue for syncing
+                    modeText.textContent = syncStatus.pending > 0
+                        ? `Syncing (${syncStatus.pending})`
+                        : 'Syncing...';
+                    indicator.title = 'Syncing with Google Sheets';
+                } else if (syncStatus.error) {
+                    indicatorDot.style.background = '#ef4444'; // Red for error
+                    modeText.textContent = 'Sync Error';
+                    indicator.title = syncStatus.error;
+                } else {
+                    indicatorDot.style.background = '#4ecca3'; // Green for synced
+                    modeText.textContent = 'Synced';
+                    indicator.title = 'Data is synced to Google Sheets';
+                }
+
+                localDataCard.style.display = 'block';
+                await updateLocalPomodoroCount();
+                // Update Google Sheets count when sync status changes
+                updateGooglePomodoroCount();
+            }
+        }
+
+        // Update local pomodoro count display
+        async function updateLocalPomodoroCount() {
+            const countEl = document.getElementById('local-pomodoro-count');
+            if (countEl) {
+                const count = await Storage.getLocalPomodoroCount();
+                countEl.textContent = count;
+            }
+        }
+
+        // Update Google Sheets pomodoro count display
+        // Uses efficient count endpoint that only fetches IDs, not all data
+        async function updateGooglePomodoroCount() {
+            const countEl = document.getElementById('google-pomodoro-count');
+            if (countEl && authStatus.logged_in) {
+                try {
+                    const res = await Storage.authenticatedFetch('/api/sheets/pomodoros/count');
+                    if (res.ok) {
+                        const data = await res.json();
+                        countEl.textContent = data.count || 0;
+                    }
+                } catch (e) {
+                    console.error('Error fetching Google pomodoro count:', e);
+                }
+            }
+        }
+
+        // Show local data migration modal
+        async function showLocalMigrationModal() {
+            const count = await Storage.getLocalPomodoroCount();
+            if (count === 0) return;
+
+            document.getElementById('local-migration-count').textContent =
+                `Found ${count} pomodoro${count > 1 ? 's' : ''} in IndexedDB.`;
+            document.getElementById('local-migration-modal').classList.add('active');
+
+            // Wait for user to make a choice
+            return new Promise((resolve) => {
+                window._localMigrationResolve = resolve;
+            });
+        }
+
+        // Perform local data migration
+        async function performLocalMigration() {
+            const statusEl = document.getElementById('local-migration-status');
+            statusEl.style.display = 'block';
+            statusEl.style.color = 'var(--text-secondary)';
+            statusEl.textContent = 'Uploading...';
+
             try {
-                const res = await fetch('/api/sync/check');
-                const data = await res.json();
+                const result = await Storage.migrateLocalToBackend();
+                statusEl.style.color = 'var(--success)';
+                statusEl.textContent = `Uploaded ${result.migrated} pomodoros` +
+                    (result.skipped > 0 ? ` (${result.skipped} already existed)` : '');
+
+                // Also migrate settings if they exist
+                await Storage.migrateLocalSettingsToBackend();
+
+                setTimeout(() => {
+                    document.getElementById('local-migration-modal').classList.remove('active');
+                    updateStorageIndicator();
+                    if (window._localMigrationResolve) {
+                        window._localMigrationResolve();
+                        delete window._localMigrationResolve;
+                    }
+                }, 1500);
+            } catch (e) {
+                statusEl.style.color = 'var(--accent)';
+                statusEl.textContent = 'Upload failed: ' + e.message;
+            }
+        }
+
+        // Discard local data migration
+        async function discardLocalMigration() {
+            await Storage.clearLocalData();
+            document.getElementById('local-migration-modal').classList.remove('active');
+            await updateStorageIndicator();
+            if (window._localMigrationResolve) {
+                window._localMigrationResolve();
+                delete window._localMigrationResolve;
+            }
+        }
+
+        // Export all data as CSV
+        async function exportData() {
+            await Storage.downloadCSV();
+        }
+
+        // Local data management functions
+        async function downloadLocalData() {
+            await Storage.downloadLocalCSV();
+            const statusEl = document.getElementById('local-data-status');
+            statusEl.style.display = 'block';
+            statusEl.style.color = 'var(--success)';
+            statusEl.textContent = 'Downloaded!';
+            setTimeout(() => { statusEl.style.display = 'none'; }, 2000);
+        }
+
+        async function uploadCSV(input) {
+            const file = input.files[0];
+            if (!file) return;
+
+            const statusEl = document.getElementById('local-data-status');
+            statusEl.style.display = 'block';
+            statusEl.style.color = 'var(--text-secondary)';
+            statusEl.textContent = 'Importing...';
+
+            try {
+                const text = await file.text();
+                const lines = text.trim().split('\n');
+
+                // Skip header row
+                if (lines.length < 2) {
+                    throw new Error('CSV file is empty');
+                }
+
+                // Parse CSV (handle quoted fields)
+                function parseCSVLine(line) {
+                    const result = [];
+                    let current = '';
+                    let inQuotes = false;
+                    for (let i = 0; i < line.length; i++) {
+                        const char = line[i];
+                        if (char === '"') {
+                            if (inQuotes && line[i + 1] === '"') {
+                                current += '"';
+                                i++;
+                            } else {
+                                inQuotes = !inQuotes;
+                            }
+                        } else if (char === ',' && !inQuotes) {
+                            result.push(current);
+                            current = '';
+                        } else {
+                            current += char;
+                        }
+                    }
+                    result.push(current);
+                    return result;
+                }
+
+                let imported = 0;
+                let skipped = 0;
+
+                // Get existing IDs to avoid duplicates
+                const existingPomodoros = await Storage.getPomodoros();
+                const existingIds = new Set(existingPomodoros.map(p => p.id));
+
+                for (let i = 1; i < lines.length; i++) {
+                    const fields = parseCSVLine(lines[i]);
+                    if (fields.length < 6) continue;
+
+                    const [id, name, type, start_time, end_time, duration_minutes, notes] = fields;
+
+                    if (existingIds.has(id)) {
+                        skipped++;
+                        continue;
+                    }
+
+                    await Storage.createManualPomodoro({
+                        id: id,  // Preserve original ID
+                        name: name || '',
+                        type: type || 'Product',
+                        start_time: start_time,
+                        end_time: end_time,
+                        duration_minutes: parseInt(duration_minutes) || 25,
+                        notes: notes || null
+                    });
+                    imported++;
+                }
+
+                statusEl.style.color = 'var(--success)';
+                statusEl.textContent = `✓ Imported ${imported} pomodoros` + (skipped > 0 ? ` (${skipped} duplicates skipped)` : '');
+
+                // Reload views
+                await loadWeeklyOverview();
+                await loadHistory();
+                await updateStorageIndicator();
+                await updateLocalPomodoroCount();
+                if (authStatus.logged_in) updateGooglePomodoroCount();
+
+            } catch (e) {
+                statusEl.style.color = 'var(--accent)';
+                statusEl.textContent = 'Import failed: ' + e.message;
+            }
+
+            // Reset file input for future uploads
+            input.value = '';
+        }
+
+        function confirmClearLocalData() {
+            document.getElementById('clear-data-modal').classList.add('active');
+        }
+
+        function hideClearDataModal() {
+            document.getElementById('clear-data-modal').classList.remove('active');
+        }
+
+        async function clearLocalDataConfirmed() {
+            await Storage.clearLocalData();
+            hideClearDataModal();
+            await updateLocalPomodoroCount();
+            await loadWeeklyOverview();
+            await loadHistory();
+            await loadSettings();
+
+            const statusEl = document.getElementById('local-data-status');
+            statusEl.style.display = 'block';
+            statusEl.style.color = 'var(--success)';
+            statusEl.textContent = 'All local data cleared';
+            setTimeout(() => { statusEl.style.display = 'none'; }, 2000);
+        }
+
+        // Listen for storage changes from other tabs
+        window.addEventListener('acquacotta-storage-change', async () => {
+            await loadWeeklyOverview();
+            await loadHistory();
+            await updateLocalPomodoroCount();
+        });
+
+        // Listen for sync status changes
+        window.addEventListener('acquacotta-sync-status', async (event) => {
+            await updateStorageIndicator();
+        });
+
+        async function showInitialSyncModal() {
+            // Automatic bidirectional merge with duplicate detection
+            try {
+                const localPomodoros = await Storage.getLocalPomodorosForMigration();
+                const localCount = localPomodoros.length;
+                const localIds = new Set(localPomodoros.map(p => p.id));
+
+                // Fetch Sheets data
+                let sheetsData = [];
+                let sheetsCount = 0;
+                try {
+                    const res = await Storage.authenticatedFetch('/api/sheets/pomodoros');
+                    if (res.ok) {
+                        sheetsData = await res.json();
+                        sheetsCount = sheetsData.length;
+                    }
+                } catch (e) {
+                    console.error('Failed to fetch sheets data:', e);
+                }
+
+                // Check for duplicate IDs in Sheets
+                const sheetsIds = sheetsData.map(p => p.id);
+                const sheetsIdCounts = {};
+                sheetsIds.forEach(id => {
+                    sheetsIdCounts[id] = (sheetsIdCounts[id] || 0) + 1;
+                });
+                const duplicateIds = Object.entries(sheetsIdCounts).filter(([id, count]) => count > 1);
 
                 const modal = document.getElementById('initial-sync-modal');
                 const titleEl = document.getElementById('sync-modal-title');
@@ -3540,65 +3913,61 @@
                 const countsEl = document.getElementById('sync-counts');
                 const actionsEl = document.getElementById('sync-modal-actions');
 
-                const localCount = data.local_count || 0;
-                const sharedCacheCount = data.shared_cache_count || 0;
-                const sheetsCount = data.sheets_count || 0;
-
                 // Clear previous content
                 actionsEl.innerHTML = '';
 
-                // Priority: shared cache (data from before login) > local > sheets
-                if (sharedCacheCount > 0) {
-                    // Found data in shared cache from before login
-                    titleEl.textContent = 'Upload Your Local Work?';
-                    descEl.textContent = 'You have pomodoros from before you logged in. Would you like to upload them to Google Sheets?';
-                    let countsHtml = `<span style="color: var(--accent);">Found ${sharedCacheCount} pomodoro${sharedCacheCount > 1 ? 's' : ''} from local session.</span>`;
-                    if (sheetsCount > 0) {
-                        countsHtml += `<br><span style="color: var(--success);">Also found ${sheetsCount} pomodoro${sheetsCount > 1 ? 's' : ''} in Google Sheets.</span>`;
-                    }
-                    countsEl.innerHTML = countsHtml;
-                    actionsEl.innerHTML = `
-                        <button class="secondary" onclick="performInitialSync('skip', 'skip')">No, Discard Local</button>
-                        <button class="primary" onclick="performInitialSync('shared_cache_to_sheets', 'skip')">Yes, Upload to Sheets</button>
-                    `;
-                } else if (localCount === 0 && sheetsCount === 0) {
-                    // Neither has data - just complete sync silently
-                    await performInitialSync('skip', 'skip');
-                    return;
-                } else if (localCount > 0 && sheetsCount === 0) {
-                    // Only local has data - offer to push to sheets
-                    titleEl.textContent = 'Upload Local Data?';
-                    descEl.textContent = 'You have pomodoros on this device. Would you like to upload them to Google Sheets?';
-                    countsEl.innerHTML = `<span style="color: var(--accent);">Found ${localCount} pomodoro${localCount > 1 ? 's' : ''} locally.</span>`;
-                    actionsEl.innerHTML = `
-                        <button class="secondary" onclick="performInitialSync('skip', 'skip')">No, Start Fresh</button>
-                        <button class="primary" onclick="performInitialSync('local_to_sheets', 'local_to_sheets')">Yes, Upload</button>
-                    `;
-                } else if (localCount === 0 && sheetsCount > 0) {
-                    // Only sheets has data - auto-download silently
-                    await performInitialSync('sheets_to_local', 'sheets_to_local');
-                    return;
-                } else {
-                    // Both have data - ask user to choose
-                    titleEl.textContent = 'Data Found in Both Places';
-                    descEl.textContent = 'You have data on this device AND in Google Sheets. What would you like to do?';
+                if (duplicateIds.length > 0) {
+                    // Duplicates found in Sheets - warn user
+                    titleEl.textContent = 'Duplicate Entries Found';
+                    descEl.innerHTML = `Your Google Sheet has <strong>${duplicateIds.length} duplicate IDs</strong>. Please open your spreadsheet and remove duplicate rows before syncing.`;
                     countsEl.innerHTML = `
-                        <span style="color: var(--accent);">${localCount} pomodoro${localCount > 1 ? 's' : ''} locally</span><br>
-                        <span style="color: var(--success);">${sheetsCount} pomodoro${sheetsCount > 1 ? 's' : ''} in Google Sheets</span>
+                        <span style="color: #ef4444;">Found ${duplicateIds.length} duplicate ID${duplicateIds.length > 1 ? 's' : ''} in Google Sheets.</span><br>
+                        <span style="color: var(--text-secondary); font-size: 0.8rem;">Sort column A (id) to find and delete duplicates.</span>
                     `;
                     actionsEl.innerHTML = `
-                        <button class="secondary" onclick="performInitialSync('sheets_to_local', 'sheets_to_local')">Use Google Sheets</button>
-                        <button class="primary" onclick="performInitialSync('local_to_sheets', 'local_to_sheets')">Upload Local Data</button>
+                        <button class="secondary" onclick="performInitialSync('skip')">Skip Sync</button>
+                        <a href="https://docs.google.com/spreadsheets/d/${authStatus.spreadsheet_id}" target="_blank" class="primary" style="display: inline-block; padding: 0.75rem 1.5rem; text-decoration: none; border-radius: 0.25rem; background: var(--primary); color: white;">Open Spreadsheet</a>
                     `;
+                    modal.classList.add('active');
+                    return;
                 }
 
+                if (localCount === 0 && sheetsCount === 0) {
+                    // Neither has data - complete silently
+                    await performInitialSync('skip');
+                    return;
+                }
+
+                // Calculate what needs to sync
+                const sheetsIdSet = new Set(sheetsIds);
+                const toUpload = localPomodoros.filter(p => !sheetsIdSet.has(p.id));
+                const toDownload = sheetsData.filter(p => !localIds.has(p.id));
+
+                if (toUpload.length === 0 && toDownload.length === 0) {
+                    // Already in sync - complete silently
+                    await performInitialSync('skip');
+                    return;
+                }
+
+                // Show merge summary and auto-merge
+                titleEl.textContent = 'Syncing Data...';
+                descEl.textContent = 'Merging your local data with Google Sheets.';
+                countsEl.innerHTML = `
+                    <span style="color: var(--accent);">${toUpload.length} to upload to Sheets</span><br>
+                    <span style="color: var(--success);">${toDownload.length} to download from Sheets</span>
+                `;
+                actionsEl.innerHTML = '';
                 modal.classList.add('active');
+
+                // Perform automatic merge
+                await performInitialSync('merge');
+
             } catch (e) {
                 console.error('Failed to check sync sources:', e);
             }
         }
 
-        async function performInitialSync(pomodorosDirection, settingsDirection) {
+        async function performInitialSync(action) {
             const modal = document.getElementById('initial-sync-modal');
             const descEl = document.getElementById('sync-modal-desc');
             const actionsEl = document.getElementById('sync-modal-actions');
@@ -3607,44 +3976,77 @@
             actionsEl.innerHTML = '';
 
             try {
-                const res = await fetch('/api/migrate', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        pomodoros_direction: pomodorosDirection,
-                        settings_direction: settingsDirection
-                    })
-                });
-                const data = await res.json();
+                let result = { success: true, uploaded: 0, downloaded: 0 };
 
-                if (data.success) {
-                    modal.classList.remove('active');
-                    // Reload all data views
-                    await loadWeeklyOverview();  // Refresh Timer tab
-                    await loadHistory();
-                    await loadSettings();
+                if (action === 'upload') {
+                    // Upload local data to Sheets
+                    result = await Storage.migrateLocalToBackend();
+                    await Storage.migrateLocalSettingsToBackend();
+                } else if (action === 'download') {
+                    // Download from Sheets to IndexedDB
+                    result = await Storage.syncFromSheets();
+                } else if (action === 'merge') {
+                    // Bidirectional merge: upload missing to Sheets, download missing to local
+                    const uploadResult = await Storage.migrateLocalToBackend();
+                    const downloadResult = await Storage.syncFromSheets();
+                    await Storage.migrateLocalSettingsToBackend();
+                    result = {
+                        success: true,
+                        uploaded: uploadResult.migrated || 0,
+                        downloaded: downloadResult.imported || 0
+                    };
+                }
+                // 'skip' just clears the flag and continues
 
-                    // Show status message
-                    const statusEl = document.getElementById('migrate-status');
-                    if (statusEl) {
-                        statusEl.style.display = 'block';
-                        statusEl.style.color = 'var(--success)';
-                        if (data.pomodoros_migrated > 0) {
-                            statusEl.textContent = `✓ Synced ${data.pomodoros_migrated} pomodoros`;
-                        } else {
-                            statusEl.textContent = '✓ Sync complete';
-                        }
+                // Clear the initial sync flag
+                await fetch('/api/auth/clear-initial-sync', { method: 'POST' });
+
+                modal.classList.remove('active');
+                // Reload all data views
+                await loadWeeklyOverview();
+                await loadHistory();
+                await loadSettings();
+                await updateStorageIndicator();
+
+                // Show status message
+                const statusEl = document.getElementById('migrate-status');
+                if (statusEl) {
+                    statusEl.style.display = 'block';
+                    statusEl.style.color = 'var(--success)';
+                    if (result.uploaded > 0 || result.downloaded > 0) {
+                        // Merge result
+                        const parts = [];
+                        if (result.uploaded > 0) parts.push(`${result.uploaded} uploaded`);
+                        if (result.downloaded > 0) parts.push(`${result.downloaded} downloaded`);
+                        statusEl.textContent = `✓ ${parts.join(', ')}`;
+                    } else if (result.migrated > 0 || result.imported > 0) {
+                        statusEl.textContent = `✓ Synced ${result.migrated || result.imported} pomodoros`;
+                    } else {
+                        statusEl.textContent = '✓ Sync complete';
                     }
-                } else {
-                    descEl.textContent = 'Sync failed: ' + (data.error || 'Unknown error');
-                    descEl.style.color = 'var(--accent)';
-                    actionsEl.innerHTML = `<button class="primary" onclick="document.getElementById('initial-sync-modal').classList.remove('active')">Close</button>`;
                 }
             } catch (e) {
                 descEl.textContent = 'Sync failed: ' + e.message;
                 descEl.style.color = 'var(--accent)';
                 actionsEl.innerHTML = `<button class="primary" onclick="document.getElementById('initial-sync-modal').classList.remove('active')">Close</button>`;
             }
+        }
+
+        function loginWithGoogle() {
+            const spreadsheetId = document.getElementById('login-spreadsheet-id').value.trim();
+            if (spreadsheetId) {
+                // Pass spreadsheet ID as query parameter
+                window.location.href = '/auth/google?spreadsheet_id=' + encodeURIComponent(spreadsheetId);
+            } else {
+                window.location.href = '/auth/google';
+            }
+        }
+
+        async function logoutFromGoogle() {
+            await Storage.logout();
+            authStatus = { logged_in: false, google_configured: true };
+            updateAuthUI();
+            await updateStorageIndicator();
         }
 
         function updateAuthUI() {
@@ -3662,6 +4064,8 @@
                 if (authStatus.picture) {
                     document.getElementById('google-avatar').src = authStatus.picture;
                 }
+                // Update Google pomodoro count
+                updateGooglePomodoroCount();
             } else {
                 loggedOut.style.display = 'block';
                 loggedIn.style.display = 'none';
@@ -3721,24 +4125,101 @@
             statusEl.textContent = 'Refreshing data from Google Sheets...';
 
             try {
-                const res = await fetch('/api/sync/now', { method: 'POST' });
-                const data = await res.json();
+                const result = await Storage.syncFromSheets();
 
-                if (data.error) {
+                if (result.error) {
                     statusEl.style.color = 'var(--accent)';
-                    statusEl.textContent = 'Refresh failed: ' + data.error;
+                    statusEl.textContent = 'Refresh failed: ' + result.error;
                 } else {
                     statusEl.style.color = 'var(--success)';
-                    statusEl.textContent = `✓ Refreshed ${data.synced_from_sheets} pomodoros from Google Sheets`;
+                    statusEl.textContent = `✓ Refreshed ${result.imported || 0} pomodoros from Google Sheets`;
 
                     // Reload all data views
-                    loadWeeklyOverview();
-                    loadHistory();
-                    loadSettings();
+                    await loadWeeklyOverview();
+                    await loadHistory();
+                    await loadSettings();
+                    await updateStorageIndicator();
                 }
             } catch (e) {
                 statusEl.style.color = 'var(--accent)';
                 statusEl.textContent = 'Refresh failed: ' + e.message;
+            }
+        }
+
+        async function confirmOverwriteGoogle() {
+            const localCount = await Storage.getLocalPomodoroCount();
+            if (!confirm(`This will REPLACE all data in Google Sheets with your ${localCount} local pomodoros.\n\nThis cannot be undone. Continue?`)) {
+                return;
+            }
+            await overwriteGoogle();
+        }
+
+        async function overwriteGoogle() {
+            const statusEl = document.getElementById('migrate-status');
+            statusEl.style.display = 'block';
+            statusEl.style.color = 'var(--text-secondary)';
+            statusEl.textContent = 'Clearing Google Sheets...';
+
+            try {
+                // Clear all rows in Sheets
+                const clearRes = await Storage.authenticatedFetch('/api/sheets/clear', { method: 'POST' });
+                if (!clearRes.ok) throw new Error('Failed to clear Sheets');
+
+                statusEl.textContent = 'Uploading local data to Google Sheets...';
+
+                // Upload all local data
+                const result = await Storage.migrateLocalToBackend();
+                await Storage.migrateLocalSettingsToBackend();
+
+                statusEl.style.color = 'var(--success)';
+                statusEl.textContent = `✓ Replaced Google Sheets with ${result.migrated || 0} pomodoros`;
+
+                await updateStorageIndicator();
+            } catch (e) {
+                statusEl.style.color = 'var(--accent)';
+                statusEl.textContent = 'Overwrite failed: ' + e.message;
+            }
+        }
+
+        async function confirmOverwriteLocal() {
+            const res = await Storage.authenticatedFetch('/api/sheets/pomodoros');
+            const sheetsData = await res.json();
+            if (!confirm(`This will REPLACE all local data with ${sheetsData.length} pomodoros from Google Sheets.\n\nThis cannot be undone. Continue?`)) {
+                return;
+            }
+            await overwriteLocal();
+        }
+
+        async function overwriteLocal() {
+            const statusEl = document.getElementById('migrate-status');
+            statusEl.style.display = 'block';
+            statusEl.style.color = 'var(--text-secondary)';
+            statusEl.textContent = 'Clearing local data...';
+
+            try {
+                // Clear local IndexedDB
+                await Storage.clearAllData();
+
+                statusEl.textContent = 'Downloading from Google Sheets...';
+
+                // Download all from Sheets
+                const result = await Storage.syncFromSheets();
+
+                if (result.error) {
+                    throw new Error(result.error);
+                }
+
+                statusEl.style.color = 'var(--success)';
+                statusEl.textContent = `✓ Replaced local data with ${result.imported || 0} pomodoros`;
+
+                // Reload all data views
+                await loadWeeklyOverview();
+                await loadHistory();
+                await loadSettings();
+                await updateStorageIndicator();
+            } catch (e) {
+                statusEl.style.color = 'var(--accent)';
+                statusEl.textContent = 'Overwrite failed: ' + e.message;
             }
         }
 
@@ -3760,33 +4241,28 @@
             statusEl.textContent = 'Migrating...';
 
             try {
-                const res = await fetch('/api/migrate', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        pomodoros_direction: 'local_to_sheets',
-                        settings_direction: settingsDirection
-                    })
-                });
-                const data = await res.json();
-                if (data.success) {
-                    statusEl.style.color = 'var(--success)';
-                    let msg = `✓ Migrated ${data.pomodoros_migrated} pomodoros`;
-                    if (data.pomodoros_skipped > 0) {
-                        msg += ` (${data.pomodoros_skipped} already existed)`;
-                    }
-                    if (data.settings_direction !== 'skip') {
-                        msg += `, ${data.settings_migrated} settings`;
-                    }
-                    statusEl.textContent = msg;
-                    // Reload settings if we pulled from sheets
-                    if (settingsDirection === 'sheets_to_local') {
-                        loadSettings();
-                    }
-                } else {
-                    statusEl.style.color = 'var(--accent)';
-                    statusEl.textContent = 'Migration failed: ' + (data.error || 'Unknown error');
+                // Upload local data to Sheets
+                const pomoResult = await Storage.migrateLocalToBackend();
+
+                // Handle settings based on direction
+                if (settingsDirection === 'local_to_sheets') {
+                    await Storage.migrateLocalSettingsToBackend();
+                } else if (settingsDirection === 'sheets_to_local') {
+                    await Storage.syncFromSheets();
                 }
+
+                statusEl.style.color = 'var(--success)';
+                let msg = `✓ Migrated ${pomoResult.migrated} pomodoros`;
+                if (pomoResult.skipped > 0) {
+                    msg += ` (${pomoResult.skipped} already existed)`;
+                }
+                statusEl.textContent = msg;
+
+                // Reload settings if we pulled from sheets
+                if (settingsDirection === 'sheets_to_local') {
+                    await loadSettings();
+                }
+                await updateStorageIndicator();
             } catch (e) {
                 statusEl.style.color = 'var(--accent)';
                 statusEl.textContent = 'Migration failed: ' + e.message;
