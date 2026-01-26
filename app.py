@@ -716,8 +716,8 @@ def proxy_create_pomodoros_batch():
         spreadsheet_id = get_spreadsheet_id_from_request()
         if not spreadsheet_id:
             return jsonify({"error": "No spreadsheet ID provided"}), HTTPStatus.BAD_REQUEST
-        data = get_request_data()
-        pomodoros = data.get("pomodoros", [])
+        batch_request = get_request_data()
+        pomodoros = batch_request.get("pomodoros", [])
         count = sheets_storage.save_pomodoros_batch(service, spreadsheet_id, pomodoros)
         return jsonify({"status": "ok", "count": count})
     except HttpError as e:
@@ -788,13 +788,10 @@ def proxy_save_settings():
     try:
         service = get_sheets_service()
         spreadsheet_id = get_spreadsheet_id_from_request()
-        data = get_request_data()
+        settings_payload = get_request_data()
         # Check for replace_all flag (used by "Overwrite Google" button)
-        replace_all = data.pop("_replace_all", False) if isinstance(data, dict) else False
-        print(
-            f"DEBUG settings: replace_all={replace_all}, timer_preset_1={data.get('timer_preset_1')}, num_keys={len(data) if data else 0}"
-        )
-        sheets_storage.save_settings(service, spreadsheet_id, data, replace_all=replace_all)
+        replace_all = settings_payload.pop("_replace_all", False) if isinstance(settings_payload, dict) else False
+        sheets_storage.save_settings(service, spreadsheet_id, settings_payload, replace_all=replace_all)
         return jsonify({"status": "ok"})
     except HttpError as e:
         return jsonify({"error": str(e)}), HTTPStatus.INTERNAL_SERVER_ERROR
