@@ -1,6 +1,18 @@
-"""Tests for Acquacotta Flask API endpoints."""
+"""Tests for Acquacotta Flask API endpoints.
+
+Sovereign Sandbox v2: Tests for the stateless server architecture.
+The server only handles:
+- Static pages (index, privacy, terms)
+- OAuth authentication
+- Proxying requests to Google Sheets
+
+All data storage and CRUD operations happen in the browser's IndexedDB.
+"""
 
 import json
+from unittest.mock import patch
+
+import sheets_storage
 
 
 class TestIndexRoute:
@@ -33,311 +45,157 @@ class TestAuthStatus:
         assert data["name"] == "Test User"
 
 
-class TestPomodorosAPI:
-    """Tests for pomodoro CRUD operations."""
+class TestSheetsProxyEndpoints:
+    """Tests for Google Sheets proxy endpoints."""
 
-    def test_get_pomodoros_empty(self, client):
-        """Should return empty list when no pomodoros exist."""
-        response = client.get("/api/pomodoros")
-        assert response.status_code == 200
-        data = json.loads(response.data)
-        assert data == []
+    def test_get_pomodoros_requires_auth(self, client):
+        """GET /api/sheets/pomodoros should require authentication."""
+        response = client.get("/api/sheets/pomodoros")
+        assert response.status_code == 401
 
-    def test_create_pomodoro(self, client):
-        """Should create a new pomodoro."""
+    def test_create_pomodoro_requires_auth(self, client, sample_pomodoro):
+        """POST /api/sheets/pomodoros should require authentication."""
         response = client.post(
-            "/api/pomodoros",
-            json={
-                "type": "Content",
-                "name": "Test Task",
-                "duration_minutes": 25,
-                "notes": "Test notes",
-            },
+            "/api/sheets/pomodoros",
+            json=sample_pomodoro,
             content_type="application/json",
         )
-        assert response.status_code == 200
-        data = json.loads(response.data)
-        assert data["type"] == "Content"
-        assert data["name"] == "Test Task"
-        assert data["duration_minutes"] == 25
-        assert "id" in data
-        assert "start_time" in data
-        assert "end_time" in data
+        assert response.status_code == 401
 
-    def test_create_pomodoro_minimal(self, client):
-        """Should create a pomodoro with only required fields."""
-        response = client.post(
-            "/api/pomodoros",
-            json={"type": "Product"},
-            content_type="application/json",
-        )
-        assert response.status_code == 200
-        data = json.loads(response.data)
-        assert data["type"] == "Product"
-        assert data["name"] == ""  # Default empty name
-        assert data["duration_minutes"] == 25  # Default duration
-
-    def test_get_pomodoros_after_create(self, client):
-        """Should return created pomodoros."""
-        # Create a pomodoro
-        client.post(
-            "/api/pomodoros",
-            json={"type": "Team", "name": "Meeting"},
-            content_type="application/json",
-        )
-
-        # Verify it's in the list
-        response = client.get("/api/pomodoros")
-        assert response.status_code == 200
-        data = json.loads(response.data)
-        assert len(data) == 1
-        assert data[0]["type"] == "Team"
-        assert data[0]["name"] == "Meeting"
-
-    def test_update_pomodoro(self, client):
-        """Should update an existing pomodoro."""
-        # Create a pomodoro
-        create_response = client.post(
-            "/api/pomodoros",
-            json={"type": "Content", "name": "Original"},
-            content_type="application/json",
-        )
-        pomodoro_id = json.loads(create_response.data)["id"]
-        created_data = json.loads(create_response.data)
-
-        # Update it
+    def test_update_pomodoro_requires_auth(self, client, sample_pomodoro):
+        """PUT /api/sheets/pomodoros/<id> should require authentication."""
         response = client.put(
-            f"/api/pomodoros/{pomodoro_id}",
-            json={
-                "name": "Updated",
-                "type": "Product",
-                "notes": "Updated notes",
-                "start_time": created_data["start_time"],
-                "end_time": created_data["end_time"],
-                "duration_minutes": created_data["duration_minutes"],
-            },
+            "/api/sheets/pomodoros/test-id",
+            json=sample_pomodoro,
             content_type="application/json",
         )
-        assert response.status_code == 200
+        assert response.status_code == 401
 
-        # Verify the update
-        get_response = client.get("/api/pomodoros")
-        data = json.loads(get_response.data)
-        assert len(data) == 1
-        assert data[0]["name"] == "Updated"
-        assert data[0]["type"] == "Product"
+    def test_delete_pomodoro_requires_auth(self, client):
+        """DELETE /api/sheets/pomodoros/<id> should require authentication."""
+        response = client.delete("/api/sheets/pomodoros/test-id")
+        assert response.status_code == 401
 
-    def test_delete_pomodoro(self, client):
-        """Should delete a pomodoro."""
-        # Create a pomodoro
-        create_response = client.post(
-            "/api/pomodoros",
-            json={"type": "Content", "name": "To Delete"},
-            content_type="application/json",
-        )
-        pomodoro_id = json.loads(create_response.data)["id"]
+    def test_get_settings_requires_auth(self, client):
+        """GET /api/sheets/settings should require authentication."""
+        response = client.get("/api/sheets/settings")
+        assert response.status_code == 401
 
-        # Delete it
-        response = client.delete(f"/api/pomodoros/{pomodoro_id}")
-        assert response.status_code == 200
-
-        # Verify it's gone
-        get_response = client.get("/api/pomodoros")
-        data = json.loads(get_response.data)
-        assert len(data) == 0
-
-
-class TestManualPomodoro:
-    """Tests for manual pomodoro creation."""
-
-    def test_create_manual_pomodoro(self, client):
-        """Should create a manual pomodoro with custom times."""
+    def test_save_settings_requires_auth(self, client, sample_settings):
+        """POST /api/sheets/settings should require authentication."""
         response = client.post(
-            "/api/pomodoros/manual",
-            json={
-                "type": "Content",
-                "name": "Manual Entry",
-                "start_time": "2024-01-15T09:00:00Z",
-                "end_time": "2024-01-15T09:25:00Z",
-                "duration_minutes": 25,
-                "notes": "Manually entered",
-            },
+            "/api/sheets/settings",
+            json=sample_settings,
             content_type="application/json",
         )
+        assert response.status_code == 401
+
+    def test_export_requires_auth(self, client):
+        """GET /api/sheets/export should require authentication."""
+        response = client.get("/api/sheets/export")
+        assert response.status_code == 401
+
+    def test_get_pomodoros_with_auth(self, authenticated_session, mock_sheets_service):
+        """GET /api/sheets/pomodoros should proxy to Sheets when authenticated."""
+        with patch("app.get_sheets_service", return_value=mock_sheets_service):
+            with patch.object(
+                sheets_storage,
+                "get_pomodoros",
+                return_value=[
+                    {
+                        "id": "test-1",
+                        "name": "Test",
+                        "type": "Content",
+                        "start_time": "2024-01-15T10:00:00Z",
+                        "end_time": "2024-01-15T10:25:00Z",
+                        "duration_minutes": 25,
+                        "notes": None,
+                    }
+                ],
+            ) as mock_get:
+                response = authenticated_session.get("/api/sheets/pomodoros")
+                assert response.status_code == 200
+                data = json.loads(response.data)
+                assert len(data) == 1
+                assert data[0]["name"] == "Test"
+                mock_get.assert_called_once()
+
+    def test_create_pomodoro_with_auth(self, authenticated_session, mock_sheets_service, sample_pomodoro):
+        """POST /api/sheets/pomodoros should proxy to Sheets when authenticated."""
+        with patch("app.get_sheets_service", return_value=mock_sheets_service):
+            with patch.object(sheets_storage, "save_pomodoro") as mock_save:
+                response = authenticated_session.post(
+                    "/api/sheets/pomodoros",
+                    json=sample_pomodoro,
+                    content_type="application/json",
+                )
+                assert response.status_code == 200
+                mock_save.assert_called_once()
+
+    def test_update_pomodoro_with_auth(self, authenticated_session, mock_sheets_service, sample_pomodoro):
+        """PUT /api/sheets/pomodoros/<id> should proxy to Sheets when authenticated."""
+        with patch("app.get_sheets_service", return_value=mock_sheets_service):
+            with patch.object(sheets_storage, "update_pomodoro", return_value=True) as mock_update:
+                response = authenticated_session.put(
+                    "/api/sheets/pomodoros/test-uuid-1234",
+                    json=sample_pomodoro,
+                    content_type="application/json",
+                )
+                assert response.status_code == 200
+                mock_update.assert_called_once()
+
+    def test_delete_pomodoro_with_auth(self, authenticated_session, mock_sheets_service):
+        """DELETE /api/sheets/pomodoros/<id> should proxy to Sheets when authenticated."""
+        with patch("app.get_sheets_service", return_value=mock_sheets_service):
+            with patch.object(sheets_storage, "delete_pomodoro", return_value=True) as mock_delete:
+                response = authenticated_session.delete("/api/sheets/pomodoros/test-uuid-1234")
+                assert response.status_code == 200
+                mock_delete.assert_called_once()
+
+    def test_get_settings_with_auth(self, authenticated_session, mock_sheets_service):
+        """GET /api/sheets/settings should proxy to Sheets when authenticated."""
+        with patch("app.get_sheets_service", return_value=mock_sheets_service):
+            with patch.object(
+                sheets_storage,
+                "get_settings",
+                return_value={"timer_preset_4": 25, "short_break_minutes": 5},
+            ) as mock_get:
+                response = authenticated_session.get("/api/sheets/settings")
+                assert response.status_code == 200
+                data = json.loads(response.data)
+                assert data["timer_preset_4"] == 25
+                mock_get.assert_called_once()
+
+    def test_save_settings_with_auth(self, authenticated_session, mock_sheets_service, sample_settings):
+        """POST /api/sheets/settings should proxy to Sheets when authenticated."""
+        with patch("app.get_sheets_service", return_value=mock_sheets_service):
+            with patch.object(sheets_storage, "save_settings") as mock_save:
+                response = authenticated_session.post(
+                    "/api/sheets/settings",
+                    json=sample_settings,
+                    content_type="application/json",
+                )
+                assert response.status_code == 200
+                mock_save.assert_called_once()
+
+
+class TestClearInitialSync:
+    """Tests for the clear-initial-sync endpoint."""
+
+    def test_clear_initial_sync(self, authenticated_session):
+        """Should clear the needs_initial_sync flag."""
+        # First set the flag
+        with authenticated_session.session_transaction() as sess:
+            sess["needs_initial_sync"] = True
+
+        # Call the endpoint
+        response = authenticated_session.post("/api/auth/clear-initial-sync")
         assert response.status_code == 200
+
+        # Verify flag is cleared
+        response = authenticated_session.get("/api/auth/status")
         data = json.loads(response.data)
-        assert data["start_time"] == "2024-01-15T09:00:00Z"
-        assert data["end_time"] == "2024-01-15T09:25:00Z"
-        assert data["duration_minutes"] == 25
-
-
-class TestSettingsAPI:
-    """Tests for settings endpoints."""
-
-    def test_get_default_settings(self, client):
-        """Should return default settings when none are saved."""
-        response = client.get("/api/settings")
-        assert response.status_code == 200
-        data = json.loads(response.data)
-        # Check some default values
-        assert data["timer_preset_4"] == 25
-        assert data["short_break_minutes"] == 5
-        assert data["long_break_minutes"] == 15
-        assert "pomodoro_types" in data
-
-    def test_save_settings(self, client):
-        """Should save and retrieve settings."""
-        # Save settings
-        response = client.post(
-            "/api/settings",
-            json={
-                "timer_preset_1": 10,
-                "timer_preset_2": 20,
-            },
-            content_type="application/json",
-        )
-        assert response.status_code == 200
-
-        # Retrieve and verify
-        get_response = client.get("/api/settings")
-        data = json.loads(get_response.data)
-        assert data["timer_preset_1"] == 10
-        assert data["timer_preset_2"] == 20
-
-
-class TestReportsAPI:
-    """Tests for report generation endpoints."""
-
-    def test_get_day_report_empty(self, client):
-        """Should return empty report for day with no pomodoros."""
-        response = client.get("/api/reports/day?date=2024-01-15")
-        assert response.status_code == 200
-        data = json.loads(response.data)
-        assert data["period"] == "day"
-        assert data["total_minutes"] == 0
-        assert data["total_pomodoros"] == 0
-
-    def test_get_day_report_with_pomodoros(self, client):
-        """Should return report with pomodoro data."""
-        # Create some pomodoros for a specific date
-        client.post(
-            "/api/pomodoros/manual",
-            json={
-                "type": "Content",
-                "name": "Task 1",
-                "start_time": "2024-01-15T10:00:00Z",
-                "end_time": "2024-01-15T10:25:00Z",
-                "duration_minutes": 25,
-            },
-            content_type="application/json",
-        )
-        client.post(
-            "/api/pomodoros/manual",
-            json={
-                "type": "Product",
-                "name": "Task 2",
-                "start_time": "2024-01-15T14:00:00Z",
-                "end_time": "2024-01-15T14:25:00Z",
-                "duration_minutes": 25,
-            },
-            content_type="application/json",
-        )
-
-        # Get report
-        response = client.get("/api/reports/day?date=2024-01-15")
-        assert response.status_code == 200
-        data = json.loads(response.data)
-        assert data["total_minutes"] == 50
-        assert data["total_pomodoros"] == 2
-        assert "Content" in data["by_type"]
-        assert "Product" in data["by_type"]
-
-    def test_get_week_report(self, client):
-        """Should return weekly report."""
-        response = client.get("/api/reports/week?date=2024-01-15")
-        assert response.status_code == 200
-        data = json.loads(response.data)
-        assert data["period"] == "week"
-        assert len(data["daily_totals"]) == 7
-
-    def test_get_month_report(self, client):
-        """Should return monthly report."""
-        response = client.get("/api/reports/month?date=2024-01-15")
-        assert response.status_code == 200
-        data = json.loads(response.data)
-        assert data["period"] == "month"
-        # January 2024 has 31 days
-        assert len(data["daily_totals"]) == 31
-
-    def test_invalid_period_returns_error(self, client):
-        """Should return error for invalid period."""
-        response = client.get("/api/reports/invalid")
-        assert response.status_code == 400
-
-
-class TestExportCSV:
-    """Tests for CSV export functionality."""
-
-    def test_export_csv_empty(self, client):
-        """Should return CSV with only headers when no data."""
-        response = client.get("/api/export")
-        assert response.status_code == 200
-        assert response.content_type == "text/csv; charset=utf-8"
-        assert b"id,name,type,start_time,end_time,duration_minutes,notes" in response.data
-
-    def test_export_csv_with_data(self, client):
-        """Should export pomodoros as CSV."""
-        # Create a pomodoro
-        client.post(
-            "/api/pomodoros/manual",
-            json={
-                "type": "Content",
-                "name": "Export Test",
-                "start_time": "2024-01-15T10:00:00Z",
-                "end_time": "2024-01-15T10:25:00Z",
-                "duration_minutes": 25,
-            },
-            content_type="application/json",
-        )
-
-        response = client.get("/api/export")
-        assert response.status_code == 200
-        assert b"Export Test" in response.data
-        assert b"Content" in response.data
-
-
-class TestSyncStatus:
-    """Tests for sync status endpoint."""
-
-    def test_sync_status(self, client):
-        """Should return sync status."""
-        response = client.get("/api/sync/status")
-        assert response.status_code == 200
-        data = json.loads(response.data)
-        assert "syncing" in data
-        assert "pending_operations" in data
-        assert "google_connected" in data
-
-
-class TestLocalPomodoroCount:
-    """Tests for local pomodoro count endpoint."""
-
-    def test_local_count_empty(self, client):
-        """Should return 0 when no pomodoros."""
-        response = client.get("/api/local-pomodoro-count")
-        assert response.status_code == 200
-        data = json.loads(response.data)
-        assert data["count"] == 0
-
-    def test_local_count_after_create(self, client):
-        """Should return correct count after creating pomodoros."""
-        # Create two pomodoros
-        client.post("/api/pomodoros", json={"type": "Content"}, content_type="application/json")
-        client.post("/api/pomodoros", json={"type": "Product"}, content_type="application/json")
-
-        response = client.get("/api/local-pomodoro-count")
-        data = json.loads(response.data)
-        assert data["count"] == 2
+        assert data["needs_initial_sync"] is False
 
 
 class TestStaticPages:

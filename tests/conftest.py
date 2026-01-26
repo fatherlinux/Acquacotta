@@ -1,14 +1,19 @@
-"""Pytest fixtures for Acquacotta tests."""
+"""Pytest fixtures for Acquacotta tests.
 
+Sovereign Sandbox v2: Tests for stateless server architecture.
+The server only handles OAuth and proxies requests to Google Sheets.
+All data storage happens in the browser's IndexedDB.
+"""
+
+import base64
+import json
 import os
-import sqlite3
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 # Set environment variables before importing app
 os.environ["FLASK_SECRET_KEY"] = "test-secret-key"
-os.environ["CLEAR_CACHE_ON_START"] = "false"
 
 import app as app_module
 
@@ -24,45 +29,25 @@ def temp_data_dir(tmp_path):
 @pytest.fixture
 def app(temp_data_dir):
     """Create and configure a test Flask application."""
-    # Patch DATA_DIR before creating the app instance
+    # Patch DATA_DIR for the session storage
     with patch.object(app_module, "DATA_DIR", temp_data_dir):
-        with patch.object(app_module, "DEFAULT_DB_PATH", temp_data_dir / "test.db"):
-            # Reinitialize the database with the test path
-            app_module.init_db(temp_data_dir / "test.db")
+        test_app = app_module.app
+        test_app.config.update(
+            {
+                "TESTING": True,
+                "SECRET_KEY": "test-secret-key",
+                "SESSION_TYPE": "filesystem",
+                "SESSION_FILE_DIR": str(temp_data_dir / "sessions"),
+            }
+        )
 
-            test_app = app_module.app
-            test_app.config.update(
-                {
-                    "TESTING": True,
-                    "SECRET_KEY": "test-secret-key",
-                    "SESSION_TYPE": "filesystem",
-                    "SESSION_FILE_DIR": str(temp_data_dir / "sessions"),
-                }
-            )
-
-            yield test_app
+        yield test_app
 
 
 @pytest.fixture
 def client(app):
     """Create a test client for the Flask application."""
     return app.test_client()
-
-
-@pytest.fixture
-def db_path(temp_data_dir):
-    """Return the test database path."""
-    return temp_data_dir / "test.db"
-
-
-@pytest.fixture
-def test_db(db_path):
-    """Create a test database with schema initialized."""
-    app_module.init_db(db_path)
-    conn = sqlite3.connect(db_path)
-    conn.row_factory = sqlite3.Row
-    yield conn
-    conn.close()
 
 
 @pytest.fixture
@@ -107,20 +92,66 @@ def mock_sheets_service():
     return service
 
 
+class AuthenticatedTestClient:
+    """Wrapper around Flask test client that includes credentials in all requests.
+
+    The stateless architecture expects credentials in X-Credentials header (for GET/DELETE)
+    or _credentials in request body (for POST/PUT). This wrapper automatically adds them.
+    """
+
+    def __init__(self, client, credentials):
+        self._client = client
+        self._credentials = credentials
+        self._credentials_header = base64.b64encode(json.dumps(credentials).encode()).decode()
+
+    def _add_credentials_header(self, kwargs):
+        """Add X-Credentials header to request."""
+        headers = kwargs.get("headers", {})
+        headers["X-Credentials"] = self._credentials_header
+        kwargs["headers"] = headers
+        return kwargs
+
+    def get(self, *args, **kwargs):
+        return self._client.get(*args, **self._add_credentials_header(kwargs))
+
+    def post(self, *args, **kwargs):
+        return self._client.post(*args, **self._add_credentials_header(kwargs))
+
+    def put(self, *args, **kwargs):
+        return self._client.put(*args, **self._add_credentials_header(kwargs))
+
+    def delete(self, *args, **kwargs):
+        return self._client.delete(*args, **self._add_credentials_header(kwargs))
+
+    def session_transaction(self):
+        """Proxy session_transaction for tests that need to manipulate session."""
+        return self._client.session_transaction()
+
+
 @pytest.fixture
 def authenticated_session(app):
-    """Create a session with mock authentication."""
+    """Create a session with mock authentication.
+
+    Returns a wrapped test client that automatically includes credentials
+    in request headers, matching the stateless architecture.
+    """
+    credentials = {
+        "token": "fake-token",
+        "refresh_token": "fake-refresh-token",
+        "token_uri": "https://oauth2.googleapis.com/token",
+        "client_id": "fake-client-id",
+        "client_secret": "fake-client-secret",
+        "scopes": ["https://www.googleapis.com/auth/drive.file"],
+        "spreadsheet_id": "fake-spreadsheet-id",
+    }
+
     with app.test_client() as client:
+        # Set session variables for endpoints that return session data (e.g., /api/auth/status)
         with client.session_transaction() as sess:
-            sess["credentials"] = {
-                "token": "fake-token",
-                "refresh_token": "fake-refresh-token",
-                "token_uri": "https://oauth2.googleapis.com/token",
-                "client_id": "fake-client-id",
-                "client_secret": "fake-client-secret",
-                "scopes": ["https://www.googleapis.com/auth/drive.file"],
-            }
+            sess["credentials"] = credentials
             sess["user_email"] = "test@example.com"
             sess["user_name"] = "Test User"
             sess["spreadsheet_id"] = "fake-spreadsheet-id"
-        yield client
+
+        # Wrap client to automatically include credentials in requests
+        yield AuthenticatedTestClient(client, credentials)

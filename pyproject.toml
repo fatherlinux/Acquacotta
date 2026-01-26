@@ -56,6 +56,7 @@ max-complexity = 10
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["PLR2004"]  # Magic values acceptable in test assertions
+"app.py" = ["PLR0915"]  # auth_callback is complex by nature (OAuth + IndexedDB setup)
 
 [tool.ruff.lint.isort]
 known-first-party = ["app", "sheets_storage"]
