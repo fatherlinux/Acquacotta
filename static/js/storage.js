@@ -467,7 +467,8 @@
                     const res = await authenticatedFetch(`/api/sheets/pomodoros/${record_id}`, {
                         method: 'DELETE'
                     });
-                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                    // 404 on delete is OK - record already doesn't exist
+                    if (!res.ok && res.status !== 404) throw new Error(`HTTP ${res.status}`);
                 }
             } else if (store === 'settings') {
                 const res = await authenticatedFetch('/api/sheets/settings', {
