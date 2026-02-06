@@ -1624,6 +1624,8 @@
 
         // Add a pomodoro of the same type/name on the specified day in a free slot
         async function incrementPomoBlock(type, name, dayStr, isAM) {
+            const tz = getEffectiveTimezone();
+
             // Get the selected duration from settings
             const duration = settings[`timer_preset_${selectedPreset}`] || 25;
 
@@ -1642,8 +1644,8 @@
             const endMin = isAM ? 0 : workEndMin;
 
             // Fetch existing pomodoros for that day to find free slots
-            const dayStart = new Date(dayStr + 'T00:00:00');
-            const dayEnd = new Date(dayStr + 'T23:59:59');
+            const dayStart = createDateInTimezone(dayStr, '00:00', tz);
+            const dayEnd = createDateInTimezone(dayStr, '23:59', tz);
 
             try {
                 const existingPomos = await Storage.getPomodoros(dayStart.toISOString(), dayEnd.toISOString());
@@ -1662,7 +1664,8 @@
                 for (let timeMinutes = startTimeMinutes; timeMinutes < endTimeMinutes; timeMinutes += 30) {
                     const hour = Math.floor(timeMinutes / 60);
                     const min = timeMinutes % 60;
-                    const slotStart = new Date(dayStr + 'T' + String(hour).padStart(2, '0') + ':' + String(min).padStart(2, '0') + ':00');
+                    const timeStr = String(hour).padStart(2, '0') + ':' + String(min).padStart(2, '0');
+                    const slotStart = createDateInTimezone(dayStr, timeStr, tz);
                     const slotEnd = new Date(slotStart.getTime() + duration * 60 * 1000);
 
                     // Check if this slot overlaps with any existing pomodoro
