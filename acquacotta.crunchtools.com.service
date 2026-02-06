@@ -7,7 +7,7 @@ EnvironmentFile=/srv/acquacotta.crunchtools.com/config/acquacotta.env
 ExecStart=/usr/bin/podman run -i --read-only --rm \
     -p 127.0.0.1:8080:80 \
     --name acquacotta.crunchtools.com \
-    --memory=512m \
+    --memory=1g \
     --cpus=0.5 \
     -e XDG_DATA_HOME=/data \
     -e FLASK_SECRET_KEY=${FLASK_SECRET_KEY} \
