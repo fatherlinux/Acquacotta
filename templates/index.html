@@ -1119,7 +1119,7 @@
             pomodoros_until_long_break: 4,
             always_use_short_break: false,
             tick_sound_enabled: true,
-            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            timezone: 'auto',
             date_format: 'us',
             auto_start_after_break: false,
             tick_sound_during_breaks: false,
@@ -1129,6 +1129,19 @@
             show_timer_ticks: false,
             timer_snap_interval: 60 // seconds: 1, 30, or 60
         };
+
+        // Global app timezone - always use this instead of browser timezone
+        // Updated when settings load or timezone setting changes
+        let appTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+        // Update appTimezone from settings (call after settings load or timezone change)
+        function updateAppTimezone() {
+            if (settings.timezone && settings.timezone !== 'auto') {
+                appTimezone = settings.timezone;
+            } else {
+                appTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+            }
+        }
 
         // Bell sound using Web Audio API
         let audioContext = null;
@@ -1245,12 +1258,12 @@
             });
         }
 
-        // Date formatting helper
+        // Date formatting helper - uses appTimezone
         function formatDate(date, format) {
             const d = new Date(date);
-            const day = d.getDate();
-            const month = d.getMonth() + 1;
-            const year = d.getFullYear();
+            const day = parseInt(d.toLocaleString('en-US', { day: 'numeric', timeZone: appTimezone }));
+            const month = parseInt(d.toLocaleString('en-US', { month: 'numeric', timeZone: appTimezone }));
+            const year = parseInt(d.toLocaleString('en-US', { year: 'numeric', timeZone: appTimezone }));
             const fmt = format || getEffectiveDateFormat();
 
             if (fmt === 'eu') {
@@ -1265,14 +1278,33 @@
 
         function formatDateWithDay(date, format) {
             const d = new Date(date);
-            const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-            const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-            const dayName = dayNames[d.getDay()];
-            const day = d.getDate();
-            const month = d.getMonth() + 1;
-            const monthName = monthNames[d.getMonth()];
-            const year = d.getFullYear();
+            const dayName = d.toLocaleString('en-US', { weekday: 'short', timeZone: appTimezone });
+            const day = parseInt(d.toLocaleString('en-US', { day: 'numeric', timeZone: appTimezone }));
+            const month = parseInt(d.toLocaleString('en-US', { month: 'numeric', timeZone: appTimezone }));
+            const monthName = d.toLocaleString('en-US', { month: 'short', timeZone: appTimezone });
+            const year = parseInt(d.toLocaleString('en-US', { year: 'numeric', timeZone: appTimezone }));
             const fmt = format || getEffectiveDateFormat();
+
+            if (fmt === 'eu') {
+                return `${dayName}, ${day} ${monthName}`;
+            } else if (fmt === 'iso') {
+                return `${dayName}, ${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+            } else {
+                // US format (default)
+                return `${dayName}, ${monthName} ${day}`;
+            }
+        }
+
+        // Format date with day name in a specific timezone
+        function formatDateWithDayTz(date, tz) {
+            const d = new Date(date);
+            // Extract components in the specified timezone
+            const dayName = d.toLocaleString('en-US', { weekday: 'short', timeZone: tz });
+            const day = parseInt(d.toLocaleString('en-US', { day: 'numeric', timeZone: tz }));
+            const month = parseInt(d.toLocaleString('en-US', { month: 'numeric', timeZone: tz }));
+            const monthName = d.toLocaleString('en-US', { month: 'short', timeZone: tz });
+            const year = parseInt(d.toLocaleString('en-US', { year: 'numeric', timeZone: tz }));
+            const fmt = getEffectiveDateFormat();
 
             if (fmt === 'eu') {
                 return `${dayName}, ${day} ${monthName}`;
@@ -1314,7 +1346,7 @@
         // Get effective date format (resolves 'auto' to actual format)
         function getEffectiveDateFormat() {
             if (settings.date_format === 'auto') {
-                return getDateFormatForTimezone(settings.timezone);
+                return getDateFormatForTimezone(getEffectiveTimezone());
             }
             return settings.date_format || 'us';
         }
@@ -1322,7 +1354,7 @@
         // Get effective clock format (resolves 'auto' based on timezone)
         function getEffectiveClockFormat() {
             if (settings.clock_format === 'auto') {
-                const dateFormat = getDateFormatForTimezone(settings.timezone);
+                const dateFormat = getDateFormatForTimezone(getEffectiveTimezone());
                 return dateFormat === 'us' ? '12' : '24';
             }
             return settings.clock_format || '12';
@@ -1331,7 +1363,7 @@
         // Get effective period labels (resolves 'auto' based on timezone)
         function getEffectivePeriodLabels() {
             if (settings.period_labels === 'auto') {
-                const dateFormat = getDateFormatForTimezone(settings.timezone);
+                const dateFormat = getDateFormatForTimezone(getEffectiveTimezone());
                 return dateFormat === 'us' ? 'ampm' : 'morning';
             }
             return settings.period_labels || 'ampm';
@@ -1341,12 +1373,18 @@
             const select = document.getElementById('timezone');
             const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
-            // Add browser's timezone first if not in list
+            // Add "Automatic" option first with detected timezone
+            const autoOption = document.createElement('option');
+            autoOption.value = 'auto';
+            autoOption.textContent = `Automatic (Currently ${browserTz} detected from browser)`;
+            select.appendChild(autoOption);
+
+            // Add browser's timezone if not in the standard list
             const inList = TIMEZONES.some(tz => tz.value === browserTz);
             if (!inList) {
                 const option = document.createElement('option');
                 option.value = browserTz;
-                option.textContent = `${browserTz} (Local)`;
+                option.textContent = browserTz;
                 select.appendChild(option);
             }
 
@@ -1354,17 +1392,20 @@
                 const option = document.createElement('option');
                 option.value = tz.value;
                 option.textContent = tz.label;
-                if (tz.value === browserTz) {
-                    option.textContent += ' (Local)';
-                }
                 select.appendChild(option);
             });
 
-            select.value = settings.timezone || browserTz;
+            // Default to 'auto' if no timezone set, otherwise use saved setting
+            select.value = settings.timezone || 'auto';
+        }
+
+        // Get the effective timezone - returns the global appTimezone
+        function getEffectiveTimezone() {
+            return appTimezone;
         }
 
         function updateClock() {
-            const tz = settings.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+            const tz = getEffectiveTimezone();
             const now = new Date();
 
             // Check for date change (midnight crossing or returning from background)
@@ -1419,20 +1460,17 @@
         }
 
         async function loadWeeklyOverview() {
-            const tz = settings.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+            const tz = appTimezone;
             const now = new Date();
 
             // US = Sunday first, EU/ISO = Monday first
             const sundayFirst = getEffectiveDateFormat() === 'us';
 
-            // Get start of current week
+            // Get start of current week (use browser timezone for calculation, then convert)
             const startOfWeek = new Date(now);
             if (sundayFirst) {
-                // Sunday first: go back to Sunday (getDay() = 0 for Sunday)
                 startOfWeek.setDate(now.getDate() - now.getDay());
             } else {
-                // Monday first: go back to Monday
-                // (getDay() + 6) % 7 gives days since Monday (Mon=0, Tue=1, ..., Sun=6)
                 const daysSinceMonday = (now.getDay() + 6) % 7;
                 startOfWeek.setDate(now.getDate() - daysSinceMonday);
             }
@@ -1453,10 +1491,9 @@
                 weekLabel.textContent = 'Last Week';
             } else {
                 // Format date range
-                const startMonth = startOfWeek.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-                const endDate = new Date(endOfWeek);
-                endDate.setDate(endDate.getDate() - 1); // End of week is exclusive, so subtract 1
-                const endMonth = endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                const startMonth = startOfWeek.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: tz });
+                const endDate = new Date(endOfWeek.getTime() - 24 * 60 * 60 * 1000); // End of week is exclusive, so subtract 1 day
+                const endMonth = endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: tz });
                 weekLabel.textContent = `${startMonth} - ${endMonth}`;
             }
 
@@ -1483,11 +1520,10 @@
 
             let html = '';
             for (let i = 0; i < 7; i++) {
-                const dayDate = new Date(startOfWeek);
-                dayDate.setDate(startOfWeek.getDate() + i);
+                const dayDate = new Date(startOfWeek.getTime() + i * 24 * 60 * 60 * 1000);
                 const dayStr = dayDate.toLocaleDateString('en-CA', { timeZone: tz });
                 const isToday = dayStr === todayStr;
-                const dayNum = dayDate.getDate();
+                const dayNum = parseInt(dayDate.toLocaleString('en-US', { day: 'numeric', timeZone: tz }));
 
                 // Filter pomodoros for this day
                 const dayPomos = pomodoros.filter(p => {
@@ -1495,13 +1531,13 @@
                     return pomoDate.toLocaleDateString('en-CA', { timeZone: tz }) === dayStr;
                 });
 
-                // Split into AM/PM (noon = 12:00)
+                // Split into AM/PM (noon = 12:00) using configured timezone
                 const amPomos = dayPomos.filter(p => {
-                    const h = new Date(p.start_time).getHours();
+                    const h = parseInt(new Date(p.start_time).toLocaleString('en-US', { hour: 'numeric', hour12: false, timeZone: tz }));
                     return h < 12;
                 });
                 const pmPomos = dayPomos.filter(p => {
-                    const h = new Date(p.start_time).getHours();
+                    const h = parseInt(new Date(p.start_time).toLocaleString('en-US', { hour: 'numeric', hour12: false, timeZone: tz }));
                     return h >= 12;
                 });
 
@@ -1680,8 +1716,59 @@
             }
         }
 
+        // Helper: Create a Date object for a specific time in the configured timezone
+        // When user enters "12:00" in the app, we want that to mean 12:00 in appTimezone
+        function createDateInTimezone(dayStr, timeStr, tz) {
+            const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+            // If app timezone matches browser timezone, no conversion needed
+            if (tz === browserTz) {
+                return new Date(dayStr + 'T' + timeStr + ':00');
+            }
+
+            // Different timezones: we need to find what UTC time corresponds to
+            // the given local time in the target timezone
+            //
+            // Strategy: Create date in browser TZ, then figure out the offset difference
+            const browserDate = new Date(dayStr + 'T' + timeStr + ':00');
+
+            // Get what time it would be in target TZ at this UTC moment
+            const targetTimeStr = browserDate.toLocaleString('en-US', {
+                timeZone: tz,
+                year: 'numeric', month: '2-digit', day: '2-digit',
+                hour: '2-digit', minute: '2-digit', second: '2-digit',
+                hour12: false
+            });
+
+            // Get what time it is in browser TZ at this UTC moment
+            const browserTimeStr = browserDate.toLocaleString('en-US', {
+                timeZone: browserTz,
+                year: 'numeric', month: '2-digit', day: '2-digit',
+                hour: '2-digit', minute: '2-digit', second: '2-digit',
+                hour12: false
+            });
+
+            // Parse both times to get the offset in minutes
+            const parseTime = (str) => {
+                const [datePart, timePart] = str.split(', ');
+                const [m, d, y] = datePart.split('/').map(Number);
+                const [h, min, s] = timePart.split(':').map(Number);
+                return new Date(y, m-1, d, h, min, s).getTime();
+            };
+
+            const targetMs = parseTime(targetTimeStr);
+            const browserMs = parseTime(browserTimeStr);
+            const offsetMs = browserMs - targetMs;
+
+            // Adjust: if user wants 12:00 in target TZ, and target is 6 hours behind browser,
+            // we need to ADD 6 hours to the browser time
+            return new Date(browserDate.getTime() + offsetMs);
+        }
+
         // Add a pomodoro to the next available slot in morning or afternoon
         async function addPomoToNextSlot(dayStr, isMorning) {
+            const tz = getEffectiveTimezone();
+
             // Get the selected duration from settings
             const duration = settings[`timer_preset_${selectedPreset}`] || 25;
 
@@ -1699,8 +1786,9 @@
             const endMin = isMorning ? 0 : workEndMin;
 
             // Fetch existing pomodoros for that day to find free slots
-            const dayStart = new Date(dayStr + 'T00:00:00');
-            const dayEnd = new Date(dayStr + 'T23:59:59');
+            const dayStartTime = String(workStartHour).padStart(2, '0') + ':' + String(workStartMin).padStart(2, '0');
+            const dayStart = createDateInTimezone(dayStr, '00:00', tz);
+            const dayEnd = createDateInTimezone(dayStr, '23:59', tz);
 
             try {
                 const existingPomos = await Storage.getPomodoros(dayStart.toISOString(), dayEnd.toISOString());
@@ -1719,7 +1807,8 @@
                 for (let timeMinutes = startTimeMinutes; timeMinutes < endTimeMinutes; timeMinutes += 30) {
                     const hour = Math.floor(timeMinutes / 60);
                     const min = timeMinutes % 60;
-                    const slotStart = new Date(dayStr + 'T' + String(hour).padStart(2, '0') + ':' + String(min).padStart(2, '0') + ':00');
+                    const timeStr = String(hour).padStart(2, '0') + ':' + String(min).padStart(2, '0');
+                    const slotStart = createDateInTimezone(dayStr, timeStr, tz);
                     const slotEnd = new Date(slotStart.getTime() + duration * 60 * 1000);
 
                     // Check if this slot overlaps with any existing pomodoro
@@ -1728,7 +1817,7 @@
                     );
 
                     if (!isOccupied) {
-                        freeSlotTime = String(hour).padStart(2, '0') + ':' + String(min).padStart(2, '0');
+                        freeSlotTime = timeStr;
                         break;
                     }
                 }
@@ -2452,6 +2541,7 @@
         // History
         async function loadHistory() {
             const list = document.getElementById('history-list');
+            const tz = getEffectiveTimezone();
             try {
                 const pomodoros = await Storage.getPomodoros();
 
@@ -2460,10 +2550,10 @@
                     return;
                 }
 
-                // Group by date
+                // Group by date (using configured timezone)
                 const grouped = {};
                 pomodoros.forEach(p => {
-                    const date = formatDateWithDay(p.start_time);
+                    const date = formatDateWithDayTz(p.start_time, tz);
                     if (!grouped[date]) grouped[date] = [];
                     grouped[date].push(p);
                 });
@@ -2475,7 +2565,7 @@
                     html += `<h3>${date}</h3>`;
                     items.forEach(p => {
                         const color = TYPE_COLORS[p.type] || '#6b7280';
-                        const time = new Date(p.start_time).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+                        const time = new Date(p.start_time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: tz });
                         const safeId = escapeHtml(p.id);
                         html += `
                             <div class="pomodoro-item" data-id="${safeId}">
@@ -2549,16 +2639,18 @@
 
         let existingPomodoros = []; // Cache for conflict checking
 
-        // Get default start time based on working hours
+        // Get default start time based on working hours (uses configured timezone)
         function getDefaultStartTime(now) {
+            const tz = getEffectiveTimezone();
             const workStart = settings.working_hours_start || '08:00';
             const workEnd = settings.working_hours_end || '17:00';
 
             const [startHour, startMin] = workStart.split(':').map(Number);
             const [endHour, endMin] = workEnd.split(':').map(Number);
 
-            const currentHour = now.getHours();
-            const currentMin = now.getMinutes();
+            // Get current time in configured timezone
+            const currentHour = parseInt(now.toLocaleString('en-US', { hour: 'numeric', hour12: false, timeZone: tz }));
+            const currentMin = parseInt(now.toLocaleString('en-US', { minute: 'numeric', timeZone: tz }));
             const currentTimeMinutes = currentHour * 60 + currentMin;
             const workStartMinutes = startHour * 60 + startMin;
             const workEndMinutes = endHour * 60 + endMin;
@@ -2571,7 +2663,7 @@
                 return '12:00';
             } else {
                 // During working hours: use current time snapped to half hour
-                return formatTimeSnapped(now);
+                return formatTimeSnappedTz(now, tz);
             }
         }
 
@@ -2736,6 +2828,7 @@
 
         async function addManualPomodoro() {
             try {
+                const tz = getEffectiveTimezone();
                 const name = document.getElementById('add-name').value.trim();
                 const type = document.getElementById('add-type').value;
                 const date = document.getElementById('add-date').value;
@@ -2749,7 +2842,8 @@
                     return;
                 }
 
-                const startTime = new Date(`${date}T${time}`);
+                // Create start time in the configured timezone, not browser timezone
+                const startTime = createDateInTimezone(date, time, tz);
                 const slots = [];
                 let currentStart = startTime;
 
@@ -2807,6 +2901,15 @@
             const snappedMinutes = snapTo30Minutes(date.getMinutes());
             const hours = snappedMinutes >= 60 ? date.getHours() + 1 : date.getHours();
             return `${String(hours % 24).padStart(2, '0')}:${String(snappedMinutes % 60).padStart(2, '0')}`;
+        }
+
+        // Format time as HH:MM with 30-minute snapping in a specific timezone
+        function formatTimeSnappedTz(date, tz) {
+            const minutes = parseInt(date.toLocaleString('en-US', { minute: 'numeric', timeZone: tz }));
+            const snappedMinutes = snapTo30Minutes(minutes);
+            let hours = parseInt(date.toLocaleString('en-US', { hour: 'numeric', hour12: false, timeZone: tz }));
+            if (snappedMinutes >= 60) hours = (hours + 1) % 24;
+            return `${String(hours).padStart(2, '0')}:${String(snappedMinutes % 60).padStart(2, '0')}`;
         }
 
         async function showEditModal(id) {
@@ -3212,11 +3315,12 @@
             totalSeconds = remainingSeconds;
             updateTimerDisplay();
 
-            // Timezone (default to browser timezone)
+            // Timezone (default to 'auto' which uses browser timezone)
             if (!settings.timezone) {
-                settings.timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+                settings.timezone = 'auto';
             }
             document.getElementById('timezone').value = settings.timezone;
+            updateAppTimezone();  // Update global appTimezone
             updateClock();
 
             // Date format (default to auto)
@@ -3378,6 +3482,7 @@
         // Timezone dropdown - auto-save and refresh views (auto settings derive from timezone)
         document.getElementById('timezone').addEventListener('change', e => {
             settings.timezone = e.target.value;
+            updateAppTimezone();  // Update global appTimezone
             updateClock();
 
             // Reinitialize pickers and views (auto settings will use new timezone)
