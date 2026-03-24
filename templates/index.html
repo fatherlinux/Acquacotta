@@ -127,6 +127,15 @@
         .timer-status { color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.1em; }
         .timer-controls { display: flex; gap: 0.5rem; justify-content: center; flex-wrap: wrap; }
         .timer-controls button { width: 70px; height: 40px; padding: 0; text-align: center; font-size: 0.875rem; }
+        #btn-pip {
+            width: 40px; height: 40px; padding: 0; display: none;
+            align-items: center; justify-content: center;
+            background: transparent; border: 1px solid var(--bg-tertiary);
+            border-radius: 8px; cursor: pointer; color: var(--text-secondary);
+            margin-left: auto; transition: opacity 0.2s, background 0.2s;
+        }
+        #btn-pip:hover { opacity: 1; border-color: var(--text-secondary); color: var(--text-primary); }
+        #btn-pip.active { background: var(--accent); border-color: var(--accent); color: white; opacity: 1; }
         .duration-presets { display: flex; gap: 0.5rem; justify-content: center; margin-bottom: 0.5rem; }
         .duration-presets button {
             min-width: 60px; height: 44px; padding: 0.5rem 0.75rem; border: 2px solid var(--bg-tertiary); border-radius: 8px;
@@ -585,6 +594,11 @@
                         <button id="btn-resume" class="primary" style="display:none;">Resume</button>
                         <button id="btn-stop" class="secondary" style="display:none;">Stop</button>
                         <button id="btn-discard" class="secondary" style="display:none;">Discard</button>
+                        <button id="btn-pip" title="Pop-out timer (Picture-in-Picture)" onclick="togglePipWindow()">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="2" y="3" width="20" height="14" rx="2"/><rect x="12" y="9" width="8" height="6" rx="1" fill="currentColor" opacity="0.3"/>
+                            </svg>
+                        </button>
                     </div>
                 </div>
             </div>
@@ -823,6 +837,11 @@
                 <div class="setting-row">
                     <label class="setting-label" style="cursor: pointer;">
                         <span><input type="checkbox" id="show-notes-field" checked> Show notes field</span>
+                    </label>
+                </div>
+                <div class="setting-row" id="pip-setting-row" style="display:none;">
+                    <label class="setting-label" style="cursor: pointer;">
+                        <span><input type="checkbox" id="pip-timer-enabled"> Enable pop-out timer (Picture-in-Picture)</span>
                     </label>
                 </div>
             </div>
@@ -1106,6 +1125,7 @@
         let selectedPreset = 4; // Which duration preset is selected (1-4)
         let pomodorosCompleted = 0; // Count for long break logic
         let lastKnownDate = null; // Track date for midnight refresh
+        let pipWindow = null;
 
         // Drag state for slidable timer
         let isDragging = false;
@@ -1127,7 +1147,8 @@
             bell_at_break_end: true,
             pomodoro_types: [],
             show_timer_ticks: false,
-            timer_snap_interval: 60 // seconds: 1, 30, or 60
+            timer_snap_interval: 60, // seconds: 1, 30, or 60
+            pip_timer_enabled: false
         };
 
         // Global app timezone - always use this instead of browser timezone
@@ -2068,6 +2089,7 @@
                 endCap.setAttribute('cy', capY);
                 endCap.style.display = '';
             }
+            updatePipDisplay();
         }
 
         function startTimer() {
@@ -2085,6 +2107,9 @@
             document.getElementById('btn-pause').style.display = 'inline-block';
             document.getElementById('btn-stop').style.display = 'inline-block';
             document.getElementById('btn-discard').style.display = 'inline-block';
+            if (settings.pip_timer_enabled && (!pipWindow || pipWindow.closed)) {
+                openPipWindow();
+            }
 
             timerInterval = setInterval(() => {
                 if (remainingSeconds > 0) {
@@ -2204,6 +2229,7 @@
             document.getElementById('timer-status').textContent = isBreak ? breakStatus : 'Paused';
             document.getElementById('btn-pause').style.display = 'none';
             document.getElementById('btn-resume').style.display = 'inline-block';
+            updatePipDisplay();
         }
 
         function resumeTimer() {
@@ -2212,6 +2238,7 @@
             document.getElementById('timer-status').textContent = isBreak ? breakStatus : 'Focus';
             document.getElementById('btn-resume').style.display = 'none';
             document.getElementById('btn-pause').style.display = 'inline-block';
+            updatePipDisplay();
 
             timerInterval = setInterval(() => {
                 if (remainingSeconds > 0) {
@@ -2316,6 +2343,7 @@
             document.getElementById('btn-discard').style.display = 'none';
             updateTimerDisplay();
             updateBreakInfo();
+            if (pipWindow && !pipWindow.closed) pipWindow.close();
         }
 
         async function savePomodoro() {
@@ -2350,6 +2378,81 @@
             clearInterval(timerInterval);
             stopTickSound();
             resetTimer();
+        }
+
+        // Picture-in-Picture pop-out timer
+        function togglePipWindow() {
+            if (pipWindow && !pipWindow.closed) {
+                pipWindow.close();
+            } else {
+                openPipWindow();
+            }
+        }
+
+        async function openPipWindow() {
+            if (!('documentPictureInPicture' in window)) return;
+            if (pipWindow && !pipWindow.closed) return;
+            try {
+                pipWindow = await documentPictureInPicture.requestWindow({
+                    width: 300,
+                    height: 160
+                });
+                const timeText = document.getElementById('timer-time').textContent;
+                const statusText = document.getElementById('timer-status').textContent;
+                const isBreakNow = isBreak;
+                const textColor = isBreakNow ? '#4ecca3' : '#eaeaea';
+                pipWindow.document.write(`
+                    <html>
+                    <head><title>Acquacotta Timer</title></head>
+                    <body style="margin:0;display:flex;align-items:center;justify-content:center;height:100vh;background:#1a1a2e;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;flex-direction:column;">
+                        <div id="pip-time" style="font-size:4rem;font-weight:700;font-variant-numeric:tabular-nums;color:${textColor};">${timeText}</div>
+                        <div id="pip-status" style="color:#a0a0a0;text-transform:uppercase;letter-spacing:0.1em;font-size:0.875rem;">${statusText}</div>
+                    </body>
+                    </html>
+                `);
+                pipWindow.document.close();
+                document.getElementById('btn-pip').classList.add('active');
+                pipWindow.addEventListener('pagehide', () => {
+                    pipWindow = null;
+                    document.getElementById('btn-pip').classList.remove('active');
+                });
+            } catch (e) {
+                console.warn('PiP open failed:', e);
+            }
+        }
+
+        function updatePipDisplay() {
+            if (!pipWindow || pipWindow.closed) {
+                if (pipWindow) {
+                    pipWindow = null;
+                    document.getElementById('btn-pip').classList.remove('active');
+                }
+                return;
+            }
+            try {
+                const timeEl = pipWindow.document.getElementById('pip-time');
+                const statusEl = pipWindow.document.getElementById('pip-status');
+                if (timeEl) {
+                    timeEl.textContent = document.getElementById('timer-time').textContent;
+                    timeEl.style.color = isBreak ? '#4ecca3' : '#eaeaea';
+                }
+                if (statusEl) {
+                    statusEl.textContent = document.getElementById('timer-status').textContent;
+                }
+            } catch (e) {
+                pipWindow = null;
+                document.getElementById('btn-pip').classList.remove('active');
+            }
+        }
+
+        function updatePipButtonVisibility() {
+            const btn = document.getElementById('btn-pip');
+            if ('documentPictureInPicture' in window && settings.pip_timer_enabled) {
+                btn.style.display = 'flex';
+            } else {
+                btn.style.display = 'none';
+                if (pipWindow && !pipWindow.closed) pipWindow.close();
+            }
         }
 
         // Break preset buttons - set pomodoro position
@@ -3285,6 +3388,11 @@
             document.getElementById('show-notes-field').checked = settings.show_notes_field;
             updateNotesFieldVisibility();
 
+            // PiP timer (default to false)
+            settings.pip_timer_enabled = settings.pip_timer_enabled === true;
+            document.getElementById('pip-timer-enabled').checked = settings.pip_timer_enabled;
+            updatePipButtonVisibility();
+
             // Show timer ticks (default to false)
             settings.show_timer_ticks = settings.show_timer_ticks === true;
             document.getElementById('show-timer-ticks').checked = settings.show_timer_ticks;
@@ -3441,6 +3549,14 @@
         document.getElementById('show-notes-field').addEventListener('change', e => {
             settings.show_notes_field = e.target.checked;
             updateNotesFieldVisibility();
+            autoSaveSettings();
+        });
+
+        // PiP timer checkbox - auto-save
+        document.getElementById('pip-timer-enabled').addEventListener('change', e => {
+            settings.pip_timer_enabled = e.target.checked;
+            updatePipButtonVisibility();
+            if (!e.target.checked && pipWindow && !pipWindow.closed) pipWindow.close();
             autoSaveSettings();
         });
 
@@ -4414,6 +4530,17 @@
         // Init
         populateTimezoneDropdown();
         startClock();
+
+        // Document Picture-in-Picture feature detection
+        if ('documentPictureInPicture' in window) {
+            document.getElementById('pip-setting-row').style.display = '';
+            updatePipButtonVisibility();
+        }
+
+        // Close PiP window on page unload to prevent orphans
+        window.addEventListener('beforeunload', () => {
+            if (pipWindow && !pipWindow.closed) pipWindow.close();
+        });
 
         // Handle visibility change to update day highlighting when tab becomes visible
         document.addEventListener('visibilitychange', () => {
