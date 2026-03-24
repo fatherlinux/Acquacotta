@@ -130,6 +130,7 @@ DEFAULT_SETTINGS = {
     "bell_at_pomodoro_end": True,
     "bell_at_break_end": True,
     "show_notes_field": False,
+    "pip_timer_enabled": False,
     "working_hours_start": "08:00",
     "working_hours_end": "17:00",
     "clock_format": "auto",
