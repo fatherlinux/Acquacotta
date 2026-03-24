@@ -107,3 +107,47 @@ justification = "Test comments provide test structure clarity"
 check = "verbose_comments"
 path = "tests/conftest.py"
 justification = "Fixture docstrings are required for pytest"
+
+[[exceptions]]
+check = "verbose_comments"
+path = "static/js/storage.js"
+justification = "Comments document IndexedDB operations and sync logic"
+
+[[exceptions]]
+check = "verbose_comments"
+path = "static/js/utils.js"
+justification = "Comments document date/time utility functions"
+
+[[exceptions]]
+check = "verbose_comments"
+path = "tests/js/test_utils.js"
+justification = "Test comments provide test structure clarity"
+
+[[exceptions]]
+check = "verbose_comments"
+path = "tests/test_timezone.js"
+justification = "Test comments provide test structure clarity"
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# single_use_helpers - JavaScript domain boundary functions
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+[[exceptions]]
+check = "single_use_helpers"
+path = "static/js/storage.js"
+justification = "Functions like loadCredentials, calculateReportStats, syncOperationToSheets are distinct domain operations, not fake modularity"
+
+[[exceptions]]
+check = "single_use_helpers"
+path = "static/js/utils.js"
+justification = "snapTo30Minutes and getTodayString are named utility functions with clear single responsibilities"
+
+[[exceptions]]
+check = "single_use_helpers"
+path = "tests/js/test_utils.js"
+justification = "Test helper functions (displayResults, escapeHtml) are standard test infrastructure"
+
+[[exceptions]]
+check = "single_use_helpers"
+path = "tests/test_timezone.js"
+justification = "Individual test functions (testAutomaticTimezone, etc.) are standard test organization, not fake modularity"

@@ -154,12 +154,12 @@
             const store = transaction.objectStore(storeName);
 
             try {
-                const result = callback(store);
-                if (result && result.onsuccess !== undefined) {
-                    result.onsuccess = () => resolve(result.result);
-                    result.onerror = () => reject(result.error);
+                const request = callback(store);
+                if (request && request.onsuccess !== undefined) {
+                    request.onsuccess = () => resolve(request.result);
+                    request.onerror = () => reject(request.error);
                 } else {
-                    transaction.oncomplete = () => resolve(result);
+                    transaction.oncomplete = () => resolve(request);
                     transaction.onerror = () => reject(transaction.error);
                 }
             } catch (e) {
@@ -1316,13 +1316,13 @@
                 });
 
                 if (res.ok) {
-                    const result = await res.json();
+                    const batchResponse = await res.json();
                     // Mark all as synced
                     for (const pomo of pomodoros) {
                         pomo.synced = true;
                         await putInStore(STORES.POMODOROS, pomo);
                     }
-                    return { migrated: result.count || 0, skipped: pomodoros.length - (result.count || 0) };
+                    return { migrated: batchResponse.count || 0, skipped: pomodoros.length - (batchResponse.count || 0) };
                 } else {
                     return { migrated: 0, skipped: 0, error: `HTTP ${res.status}` };
                 }
