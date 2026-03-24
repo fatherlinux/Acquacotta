@@ -8,7 +8,7 @@ on:
 
 env:
   REGISTRY: quay.io
-  IMAGE_NAME: fatherlinux/acquacotta
+  IMAGE_NAME: crunchtools/acquacotta
 
 jobs:
   build-and-push:
