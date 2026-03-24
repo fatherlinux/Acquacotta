@@ -2,9 +2,9 @@
 # Built on top of acquacotta-base - only contains app code
 # Very fast to build since infrastructure is pre-cached
 #
-# Build: podman build -t quay.io/fatherlinux/acquacotta .
+# Build: podman build -t quay.io/crunchtools/acquacotta .
 
-FROM quay.io/fatherlinux/acquacotta-base:latest
+FROM quay.io/crunchtools/acquacotta-base:latest
 
 WORKDIR /app
 

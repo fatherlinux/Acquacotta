@@ -14,8 +14,8 @@ on:
 
 env:
   REGISTRY: quay.io
-  BASE_IMAGE: fatherlinux/acquacotta-base
-  TEST_IMAGE: fatherlinux/acquacotta-test
+  BASE_IMAGE: crunchtools/acquacotta-base
+  TEST_IMAGE: crunchtools/acquacotta-test
 
 jobs:
   build-base:

@@ -32,7 +32,7 @@ Acquacotta was created as fun project by a veteran of the Pomodoro Technique wit
 Acquacotta means "cooked water" in Italian—a traditional, hearty tomato soup. Since the Pomodoro technique is named after the tomato-shaped kitchen timer (tomato is *Pomodoro* in Italian), we felt a "complete meal" of a system—timer, automated logging, and powerful reporting—deserved a name that felt just as substantial.
 
 # Getting Started
-Every time a PR is merged, GitHub Actions builds and pushes a new version of the container to quay.io/fatherlinux/acquacotta This container image is free to use.
+Every time a PR is merged, GitHub Actions builds and pushes a new version of the container to quay.io/crunchtools/acquacotta This container image is free to use.
 
 ## Self-Hosting
 
@@ -40,7 +40,7 @@ Every time a PR is merged, GitHub Actions builds and pushes a new version of the
 
 Just run:
 ```
-podman run -id -p 443:443 --name acquacotta quay.io/fatherlinux/acquacotta
+podman run -id -p 443:443 --name acquacotta quay.io/crunchtools/acquacotta
 ```
 Connect to the following URL (accept the auto-generated SSL certificate):
 ```
@@ -51,7 +51,7 @@ https://localhost:8443
 
 Just run:
 ```
-podman run -id -p 443:443 --name acquacotta quay.io/fatherlinux/acquacotta
+podman run -id -p 443:443 --name acquacotta quay.io/crunchtools/acquacotta
 ```
 Connect to the following URL (accept the auto-generated SSL certificate):
 ```
@@ -158,7 +158,7 @@ podman run -d --name acquacotta \
   -e GOOGLE_CLIENT_ID="your-client-id-here" \
   -e GOOGLE_CLIENT_SECRET="your-client-secret-here" \
   -e FLASK_SECRET_KEY="any-random-string-here" \
-  quay.io/fatherlinux/acquacotta:latest
+  quay.io/crunchtools/acquacotta:latest
 ```
 
 Or build locally:
@@ -238,7 +238,7 @@ podman run -d --name acquacotta \
   -e GOOGLE_CLIENT_ID="your-client-id-here" \
   -e GOOGLE_CLIENT_SECRET="your-client-secret-here" \
   -e FLASK_SECRET_KEY="any-random-string-here" \
-  quay.io/fatherlinux/acquacotta:latest
+  quay.io/crunchtools/acquacotta:latest
 ```
 
 > **Note:** The `:Z` suffix is required on SELinux-enabled systems (Fedora, RHEL, CentOS) for bind mounts.

@@ -17,7 +17,7 @@ ExecStart=/usr/bin/podman run -i --read-only --rm \
     --tmpfs /tmp \
     --tmpfs /run/httpd \
     --tmpfs /var/log/httpd \
-    quay.io/fatherlinux/acquacotta:latest
+    quay.io/crunchtools/acquacotta:latest
 ExecStop=/usr/bin/podman stop -t 3 acquacotta.crunchtools.com
 ExecStopPost=/usr/bin/podman rm -f acquacotta.crunchtools.com
 Restart=always
