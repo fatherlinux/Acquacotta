@@ -350,10 +350,13 @@
             byType[p.type] = (byType[p.type] || 0) + p.duration_minutes;
         });
 
-        // Daily totals
+        // Daily totals — group by local date, not UTC date prefix
         const dailyTotals = dates.map(d => {
-            const dayStr = d.toISOString().split('T')[0];
-            const dayPomodoros = pomodoros.filter(p => p.start_time.startsWith(dayStr));
+            const dayStr = d.toLocaleDateString('en-CA');
+            const dayPomodoros = pomodoros.filter(p => {
+                const localDate = new Date(p.start_time).toLocaleDateString('en-CA');
+                return localDate === dayStr;
+            });
             return {
                 date: dayStr,
                 minutes: dayPomodoros.reduce((sum, p) => sum + p.duration_minutes, 0),
@@ -686,115 +689,68 @@
             // Update pending count
             await updatePendingCount();
 
-            // Handle initial sync based on whether sheet existed
+            // Bidirectional sync on every page load when logged in
             if (authStatus.logged_in && storedCredentials) {
-                if (spreadsheetExisted) {
-                    // Existing sheet: bidirectional pomodoro sync + pull settings from Sheet
-                    // Only on first load after login (check if we've done this already)
-                    const syncStatus = await getFromStore(STORES.SYNC_STATUS, 'initial_sync_done');
-                    if (!syncStatus) {
-                        // 0. First, deduplicate any existing duplicates in the Sheet
-                        try {
-                            const dedupeRes = await authenticatedFetch('/api/sheets/deduplicate', {
-                                method: 'POST',
-                                body: JSON.stringify({})
-                            });
-                            if (dedupeRes.ok) {
-                                const dedupeResult = await dedupeRes.json();
-                                if (dedupeResult.removed > 0) {
-                                    console.log(`Removed ${dedupeResult.removed} duplicate pomodoros from Sheet`);
-                                }
-                            }
-                        } catch (e) {
-                            console.error('Deduplication during init failed:', e);
-                        }
+                try {
+                    // 1. Fetch pomodoros from Sheets
+                    const pomosRes = await authenticatedFetch('/api/sheets/pomodoros');
+                    if (pomosRes.ok) {
+                        const sheetsPomodoros = await pomosRes.json();
+                        const sheetsIds = new Set(sheetsPomodoros.map(p => p.id));
 
-                        // 1. Fetch pomodoros from Sheets
-                        const pomosRes = await authenticatedFetch('/api/sheets/pomodoros');
-                        if (pomosRes.ok) {
-                            const sheetsPomodoros = await pomosRes.json();
-                            const sheetsIds = new Set(sheetsPomodoros.map(p => p.id));
+                        // 2. Get local pomodoros
+                        const localPomodoros = await getAllFromStore(STORES.POMODOROS);
+                        const localIds = new Set(localPomodoros.map(p => p.id));
 
-                            // 2. Get local pomodoros
-                            const localPomodoros = await getAllFromStore(STORES.POMODOROS);
-                            const localIds = new Set(localPomodoros.map(p => p.id));
-
-                            // 3. Pull pomodoros from Sheets that don't exist locally
-                            for (const pomo of sheetsPomodoros) {
-                                if (!localIds.has(pomo.id)) {
-                                    pomo.synced = true;
-                                    await putInStore(STORES.POMODOROS, pomo);
-                                }
-                            }
-
-                            // 4. Push local pomodoros to Sheets that don't exist there
-                            for (const pomo of localPomodoros) {
-                                if (!sheetsIds.has(pomo.id)) {
-                                    await addToSyncQueue('create', 'pomodoros', pomo.id, pomo);
-                                } else {
-                                    // Mark as synced since it exists in Sheets
-                                    pomo.synced = true;
-                                    await putInStore(STORES.POMODOROS, pomo);
-                                }
+                        // 3. Pull pomodoros from Sheets that don't exist locally
+                        for (const pomo of sheetsPomodoros) {
+                            if (!localIds.has(pomo.id)) {
+                                pomo.synced = true;
+                                await putInStore(STORES.POMODOROS, pomo);
                             }
                         }
 
-                        // 5. Pull settings from Sheets (Sheet is authoritative for settings)
+                        // 4. Push local pomodoros to Sheets that don't exist there
+                        for (const pomo of localPomodoros) {
+                            if (!sheetsIds.has(pomo.id)) {
+                                await addToSyncQueue('create', 'pomodoros', pomo.id, pomo);
+                            } else {
+                                // Mark as synced since it exists in Sheets
+                                pomo.synced = true;
+                                await putInStore(STORES.POMODOROS, pomo);
+                            }
+                        }
+                    }
+
+                    // Pull settings from Sheets on first load only (Sheet is authoritative)
+                    const settingsSyncDone = await getFromStore(STORES.SYNC_STATUS, 'initial_sync_done');
+                    if (!settingsSyncDone) {
                         const settingsRes = await authenticatedFetch('/api/sheets/settings');
                         if (settingsRes.ok) {
                             const sheetsSettings = await settingsRes.json();
-                            // Clear local settings and replace with Sheet settings
-                            await clearStore(STORES.SETTINGS);
-                            for (const [key, value] of Object.entries(sheetsSettings)) {
-                                await putInStore(STORES.SETTINGS, { key, value, synced: true });
+                            if (Object.keys(sheetsSettings).length > 0) {
+                                await clearStore(STORES.SETTINGS);
+                                for (const [key, value] of Object.entries(sheetsSettings)) {
+                                    await putInStore(STORES.SETTINGS, { key, value, synced: true });
+                                }
+                                // Re-save spreadsheet_id after clearing
+                                await putInStore(STORES.SETTINGS, {
+                                    key: 'spreadsheet_id',
+                                    value: cachedSpreadsheetId,
+                                    synced: true
+                                });
                             }
-                            // Re-save spreadsheet_id after clearing (it's not in Sheet settings)
-                            await putInStore(STORES.SETTINGS, {
-                                key: 'spreadsheet_id',
-                                value: cachedSpreadsheetId,
-                                synced: false  // Mark as unsynced so it gets pushed to Sheet
-                            });
-                            // Queue the spreadsheet_id to be saved to the Sheet
-                            await addToSyncQueue('update', 'settings', 'spreadsheet_id', {
-                                spreadsheet_id: cachedSpreadsheetId
-                            });
                         }
-
-                        // 6. Process any queued pushes (including spreadsheet_id)
-                        await processSyncQueue();
-
                         await putInStore(STORES.SYNC_STATUS, { key: 'initial_sync_done', value: true });
                     }
-                } else {
-                    // New sheet: push local data TO Sheets
-                    // Check if we've done this already
-                    const syncStatus = await getFromStore(STORES.SYNC_STATUS, 'initial_push_done');
-                    if (!syncStatus) {
-                        // Push any existing local pomodoros and settings to the new sheet
-                        const localPomodoros = await getAllFromStore(STORES.POMODOROS);
-                        if (localPomodoros.length > 0) {
-                            // Queue all local pomodoros for sync
-                            for (const pomo of localPomodoros) {
-                                if (!pomo.synced) {
-                                    await addToSyncQueue('create', 'pomodoros', pomo.id, pomo);
-                                }
-                            }
-                        }
-                        // Push local settings
-                        const localSettings = await getAllFromStore(STORES.SETTINGS);
-                        if (localSettings.length > 0) {
-                            const settingsObj = {};
-                            for (const s of localSettings) {
-                                settingsObj[s.key] = s.value;
-                            }
-                            await addToSyncQueue('update', 'settings', 'all', settingsObj);
-                        }
-                        // Process the queue
-                        await processSyncQueue();
-                        // Mark initial push done and update spreadsheet_existed in SETTINGS
-                        await putInStore(STORES.SYNC_STATUS, { key: 'initial_push_done', value: true });
-                        await putInStore(STORES.SETTINGS, { key: 'spreadsheet_existed', value: true, synced: true });
-                    }
+
+                    // Mark spreadsheet as existing
+                    await putInStore(STORES.SETTINGS, { key: 'spreadsheet_existed', value: true, synced: true });
+
+                    // Process any queued pushes
+                    await processSyncQueue();
+                } catch (e) {
+                    console.error('Bidirectional sync during init failed:', e);
                 }
             }
         },
@@ -1167,6 +1123,52 @@
                 console.error('Deduplication error:', e);
                 return { error: e.message };
             }
+        },
+
+        /**
+         * Full bidirectional sync — pull from Sheets, push to Sheets
+         * @returns {Promise<object>} - { uploaded: number, downloaded: number }
+         */
+        fullSync: async function() {
+            if (!authStatus || !authStatus.logged_in) {
+                return { uploaded: 0, downloaded: 0 };
+            }
+            let uploaded = 0, downloaded = 0;
+
+            // 1. Fetch pomodoros from Sheets
+            const pomosRes = await authenticatedFetch('/api/sheets/pomodoros');
+            if (pomosRes.ok) {
+                const sheetsPomodoros = await pomosRes.json();
+                const sheetsIds = new Set(sheetsPomodoros.map(p => p.id));
+
+                const localPomodoros = await getAllFromStore(STORES.POMODOROS);
+                const localIds = new Set(localPomodoros.map(p => p.id));
+
+                // Pull from Sheets
+                for (const pomo of sheetsPomodoros) {
+                    if (!localIds.has(pomo.id)) {
+                        pomo.synced = true;
+                        await putInStore(STORES.POMODOROS, pomo);
+                        downloaded++;
+                    }
+                }
+
+                // Push to Sheets
+                for (const pomo of localPomodoros) {
+                    if (!sheetsIds.has(pomo.id)) {
+                        await addToSyncQueue('create', 'pomodoros', pomo.id, pomo);
+                        uploaded++;
+                    } else if (!pomo.synced) {
+                        pomo.synced = true;
+                        await putInStore(STORES.POMODOROS, pomo);
+                    }
+                }
+            }
+
+            // 2. Process sync queue
+            await processSyncQueue();
+
+            return { uploaded, downloaded };
         },
 
         /**

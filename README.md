@@ -21,11 +21,11 @@ Technical Features:
 - Uses an internal SQLite database by default
 - Designed to run in a Podman/Docker container or use the free online service
 - Seemlessly work between online and container using data and setting optionally saved in a private Google Sheet
-- Responsive authors - feel free to file any and all issues [here](https://github.com/fatherlinux/Acquacotta/issues)
+- Responsive authors - feel free to file any and all issues [here](https://github.com/crunchtools/acquacotta/issues)
 
 ## The Story Behind the Soup
 
-Acquacotta was created as fun project by a veteran of the Pomodoro Technique with over 20+ years of using this system from doing HPC work at NASA to Product Management for Podman, Red Hat Universal Base Image, and Red Hat Enterprise Linux 10 [LinkedIn](https://www.linkedin.com/in/fatherlinux/details/experience/). It could be said that Acquacotta was rigorously vibe coded (I know, it sounds like an oxymoron) using spec-kit, and a strict process for adding Features. The [constitution](https://github.com/fatherlinux/Acquacotta/blob/main/.specify/memory/constitution.md) and [feature specifications](https://github.com/fatherlinux/Acquacotta/blob/main/.specify/specs/000-baseline/spec.md) are transparently committed in the [Acquacotta Git repository](https://github.com/fatherlinux/Acquacotta). For 20+ years I have meticulously tracked my pomodoros, always analyzing the last four weeks. I have refined the Pomodoro technique into set of practices that not only give me focus, but also give me a sense of satisfaction and freedom. 
+Acquacotta was created as fun project by a veteran of the Pomodoro Technique with over 20+ years of using this system from doing HPC work at NASA to Product Management for Podman, Red Hat Universal Base Image, and Red Hat Enterprise Linux 10 [LinkedIn](https://www.linkedin.com/in/fatherlinux/details/experience/). It could be said that Acquacotta was rigorously vibe coded (I know, it sounds like an oxymoron) using spec-kit, and a strict process for adding Features. The [constitution](https://github.com/crunchtools/acquacotta/blob/main/.specify/memory/constitution.md) and [feature specifications](https://github.com/crunchtools/acquacotta/blob/main/.specify/specs/000-baseline/spec.md) are transparently committed in the [Acquacotta Git repository](https://github.com/crunchtools/acquacotta). For 20+ years I have meticulously tracked my pomodoros, always analyzing the last four weeks. I have refined the Pomodoro technique into set of practices that not only give me focus, but also give me a sense of satisfaction and freedom. 
 
 **Why the name?**
 
@@ -164,7 +164,7 @@ podman run -d --name acquacotta \
 Or build locally:
 
 ```bash
-git clone https://github.com/fatherlinux/acquacotta.git
+git clone https://github.com/crunchtools/acquacotta.git
 cd acquacotta
 podman build -t acquacotta .
 podman run -d --name acquacotta \

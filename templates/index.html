@@ -694,16 +694,18 @@
                         <span style="font-size: 0.875rem; color: var(--text-secondary);">Pomodoros stored: </span>
                         <span id="google-pomodoro-count" style="font-weight: 500; color: var(--accent);">0</span>
                     </div>
-                    <div style="margin-bottom: 1rem;">
-                        <label for="spreadsheet-id" style="font-size: 0.875rem; color: var(--text-secondary); display: block; margin-bottom: 0.25rem;">Spreadsheet ID:</label>
-                        <input type="text" id="spreadsheet-id" style="width: 24rem; max-width: 100%; font-family: monospace; font-size: 0.75rem; padding: 0.5rem; background: var(--bg-primary); opacity: 0.7; cursor: not-allowed;" placeholder="Spreadsheet ID" readonly>
-                        <p style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">Sign out to change spreadsheet</p>
+                    <label for="spreadsheet-id" style="font-size: 0.875rem; color: var(--text-secondary); display: block; margin-bottom: 0.25rem;">Spreadsheet ID:</label>
+                    <div style="display: inline-grid; grid-template-columns: 1fr auto; gap: 0.5rem; margin-bottom: 1rem;">
+                        <input type="text" id="spreadsheet-id" style="width: 100%; font-family: monospace; font-size: 0.75rem; padding: 0.5rem; box-sizing: border-box;" placeholder="Spreadsheet ID">
+                        <button class="secondary" onclick="updateSpreadsheetId()" style="text-align: center;">Update</button>
+                        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                            <button class="secondary" id="sync-button" onclick="manualSync()">Sync Now</button>
+                            <button class="secondary" onclick="confirmOverwriteLocal()">Overwrite Local</button>
+                            <button class="secondary" onclick="confirmOverwriteGoogle()">Overwrite Google</button>
+                        </div>
+                        <button class="secondary" onclick="logoutFromGoogle()" style="text-align: center;">Sign Out</button>
                     </div>
-                    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                        <button class="secondary" onclick="confirmOverwriteLocal()">Overwrite Local</button>
-                        <button class="secondary" onclick="confirmOverwriteGoogle()">Overwrite Google</button>
-                        <button class="secondary" onclick="logoutFromGoogle()">Sign Out</button>
-                    </div>
+                    <p id="spreadsheet-id-status" style="font-size: 0.75rem; color: var(--text-secondary); margin-top: -0.5rem; margin-bottom: 0.5rem; display: none;"></p>
                     <p id="migrate-status" style="font-size: 0.875rem; margin-top: 0.5rem; display: none;"></p>
                 </div>
             </div>
@@ -1073,19 +1075,20 @@
     </footer>
 
     <script>
-        // Type colors
-        const TYPE_COLORS = {
+        // Type colors — defaults, overridden by user settings
+        const DEFAULT_TYPE_COLORS = {
             "Product": "#e94560",
             "Customer/Partner/Community": "#4ecca3",
             "Content": "#ffc93c",
-            "Team": "#a855f7",
+            "Team": "#d946ef",
             "Social Media": "#3b82f6",
             "Unqueued": "#6b7280",
-            "Queued": "#8b5cf6",
+            "Queued": "#84cc16",
             "Learn/Train": "#10b981",
             "Travel": "#f97316",
             "PTO": "#06b6d4"
         };
+        let TYPE_COLORS = Object.assign({}, DEFAULT_TYPE_COLORS);
 
         // Common timezones
         const TIMEZONES = [
@@ -3093,7 +3096,7 @@
             if (currentPeriod === 'day') d.setDate(d.getDate() + dir);
             else if (currentPeriod === 'week') d.setDate(d.getDate() + dir * 7);
             else d.setMonth(d.getMonth() + dir);
-            currentDate = d.toISOString().split('T')[0];
+            currentDate = d.toLocaleDateString('en-CA');
             loadReport();
         }
 
@@ -3336,6 +3339,9 @@
             if (!settings.pomodoro_types || !Array.isArray(settings.pomodoro_types)) {
                 settings.pomodoro_types = [];
             }
+
+            // Load custom type colors from settings, merge with defaults
+            TYPE_COLORS = Object.assign({}, DEFAULT_TYPE_COLORS, settings.type_colors || {});
 
             // Timer presets (defaults if not set)
             settings.timer_preset_1 = settings.timer_preset_1 ?? 5;
@@ -3676,15 +3682,19 @@
         function renderTypesList() {
             const types = settings.pomodoro_types || [];
             const container = document.getElementById('types-list');
-            container.innerHTML = types.map((t, i) => `
+            container.innerHTML = types.map((t, i) => {
+                const color = TYPE_COLORS[t] || '#6b7280';
+                return `
                 <div class="type-item" draggable="true" data-index="${i}">
                     <div style="display: flex; align-items: center;">
                         <span class="drag-handle">☰</span>
+                        <span class="type-color-swatch" onclick="document.getElementById('color-picker-${i}').click()" style="display: inline-block; width: 16px; height: 16px; border-radius: 4px; background: ${color}; margin-right: 0.5rem; cursor: pointer; border: 1px solid rgba(255,255,255,0.2); flex-shrink: 0;" title="Change color"></span>
+                        <input type="color" id="color-picker-${i}" value="${color}" onchange="updateTypeColor(${i}, this.value)" style="position: absolute; width: 0; height: 0; opacity: 0; pointer-events: none;">
                         <span>${escapeHtml(t)}</span>
                     </div>
                     <button onclick="removeType(${i})" title="Remove">&#10005;</button>
                 </div>
-            `).join('');
+            `}).join('');
 
             // Add drag and drop event listeners
             const items = container.querySelectorAll('.type-item');
@@ -3777,6 +3787,16 @@
             autoSaveSettings();
         }
 
+        function updateTypeColor(index, color) {
+            const typeName = settings.pomodoro_types[index];
+            if (!typeName) return;
+            if (!settings.type_colors) settings.type_colors = {};
+            settings.type_colors[typeName] = color;
+            TYPE_COLORS[typeName] = color;
+            renderTypesList();
+            autoSaveSettings();
+        }
+
         function removeType(index) {
             if (!settings.pomodoro_types || settings.pomodoro_types.length <= 1) {
                 alert('You must have at least one type');
@@ -3826,11 +3846,10 @@
             await updateStorageIndicator();
 
             if (authStatus.logged_in) {
-                // Check if there's IndexedDB data that needs to be migrated to Sheets
-                const hasData = await Storage.hasLocalData();
+                // Auto-sync pending items silently (no prompt needed)
                 const syncStatus = Storage.getSyncStatus();
-                if (hasData && syncStatus.pending > 0) {
-                    await showLocalMigrationModal();
+                if (syncStatus.pending > 0) {
+                    await Storage.syncToSheets();
                 }
 
                 // If needs initial sync, sync from Sheets to IndexedDB
@@ -3888,6 +3907,35 @@
                 await updateLocalPomodoroCount();
                 // Update Google Sheets count when sync status changes
                 updateGooglePomodoroCount();
+            }
+        }
+
+        // Manual sync triggered by Sync Now button in settings
+        async function manualSync() {
+            const syncButton = document.getElementById('sync-button');
+            const statusEl = document.getElementById('migrate-status');
+            syncButton.disabled = true;
+            syncButton.textContent = 'Syncing...';
+            statusEl.style.display = 'block';
+            statusEl.style.color = 'var(--text-secondary)';
+            statusEl.textContent = 'Syncing...';
+            try {
+                const result = await Storage.fullSync();
+                await loadWeeklyOverview();
+                await loadHistory();
+                await updateStorageIndicator();
+                statusEl.style.color = 'var(--success)';
+                const parts = [];
+                if (result.uploaded > 0) parts.push(`${result.uploaded} uploaded`);
+                if (result.downloaded > 0) parts.push(`${result.downloaded} downloaded`);
+                statusEl.textContent = parts.length > 0 ? `✓ ${parts.join(', ')}` : '✓ Already in sync';
+            } catch (e) {
+                console.error('Manual sync failed:', e);
+                statusEl.style.color = 'var(--accent)';
+                statusEl.textContent = 'Sync failed: ' + e.message;
+            } finally {
+                syncButton.disabled = false;
+                syncButton.textContent = 'Sync Now';
             }
         }
 

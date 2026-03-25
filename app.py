@@ -320,6 +320,8 @@ def auth_google():
             prompt="consent",
         )
         session["oauth_state"] = state
+        # Store PKCE code_verifier for the callback (required by Google)
+        session["code_verifier"] = flow.code_verifier
         # Store user-provided spreadsheet ID to use after callback
         requested_spreadsheet_id = request.args.get("spreadsheet_id", "").strip()
         if requested_spreadsheet_id:
@@ -346,6 +348,8 @@ def auth_callback():
         if not flow:
             return jsonify({"error": "Google OAuth not configured"}), HTTPStatus.INTERNAL_SERVER_ERROR
 
+        # Restore PKCE code_verifier from the initial auth request
+        flow.code_verifier = session.pop("code_verifier", None)
         flow.fetch_token(authorization_response=request.url)
         credentials = flow.credentials
 
@@ -372,6 +376,7 @@ def auth_callback():
                 prompt="consent",  # Force consent screen to get new scopes
             )
             session["oauth_state"] = state  # Use consistent key name
+            session["code_verifier"] = flow.code_verifier
             return redirect(authorization_url)
 
         # Get user info
