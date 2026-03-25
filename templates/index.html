@@ -1992,7 +1992,7 @@
 
         // Report state
         let currentPeriod = 'week';
-        let currentDate = new Date().toISOString().split('T')[0];
+        let currentDate = new Date().toLocaleDateString('en-CA');
         let typeChart = null;
         let dailyChart = null;
 
@@ -3224,9 +3224,9 @@
                     label: type,
                     shortLabel: getFirstWord(type),  // First word for limited space
                     data: data.daily_totals.map(d => {
-                        // Sum minutes for this type on this day
+                        // Sum minutes for this type on this day (use local date, not UTC prefix)
                         return pomos
-                            .filter(p => p.type === type && p.start_time.startsWith(d.date))
+                            .filter(p => p.type === type && new Date(p.start_time).toLocaleDateString('en-CA') === d.date)
                             .reduce((sum, p) => sum + p.duration_minutes, 0);
                     }),
                     backgroundColor: color + 'B3', // Add transparency

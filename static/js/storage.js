@@ -1057,7 +1057,7 @@
                 startIso = startDate;
                 endIso = endDate;
             } else {
-                const range = calculatePeriodDateRange(period, dateStr || new Date().toISOString().split('T')[0]);
+                const range = calculatePeriodDateRange(period, dateStr || new Date().toLocaleDateString('en-CA'));
                 if (!range) {
                     return { error: 'Invalid period' };
                 }
