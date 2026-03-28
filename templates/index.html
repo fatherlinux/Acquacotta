@@ -2397,8 +2397,8 @@
             if (pipWindow && !pipWindow.closed) return;
             try {
                 pipWindow = await documentPictureInPicture.requestWindow({
-                    width: 300,
-                    height: 160
+                    width: 192,
+                    height: 42
                 });
                 const timeText = document.getElementById('timer-time').textContent;
                 const statusText = document.getElementById('timer-status').textContent;
@@ -2406,10 +2406,10 @@
                 const textColor = isBreakNow ? '#4ecca3' : '#eaeaea';
                 pipWindow.document.write(`
                     <html>
-                    <head><title>Acquacotta Timer</title></head>
-                    <body style="margin:0;display:flex;align-items:center;justify-content:center;height:100vh;background:#1a1a2e;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;flex-direction:column;">
-                        <div id="pip-time" style="font-size:4rem;font-weight:700;font-variant-numeric:tabular-nums;color:${textColor};">${timeText}</div>
-                        <div id="pip-status" style="color:#a0a0a0;text-transform:uppercase;letter-spacing:0.1em;font-size:0.875rem;">${statusText}</div>
+                    <head><title>Acquacotta</title></head>
+                    <body style="margin:0;display:flex;align-items:center;justify-content:space-evenly;height:100vh;background:#1a1a2e;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;flex-direction:row;overflow:hidden;">
+                        <div id="pip-time" style="font-size:min(22vw, 85vh);font-weight:700;font-variant-numeric:tabular-nums;color:${textColor};line-height:1;">${timeText}</div>
+                        <div id="pip-status" style="color:#a0a0a0;text-transform:uppercase;letter-spacing:0.05em;font-size:min(8vw, 40vh);">${statusText}</div>
                     </body>
                     </html>
                 `);
