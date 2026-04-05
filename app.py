@@ -43,7 +43,7 @@ if not secret_key:
         raise ValueError("FLASK_SECRET_KEY environment variable must be set in production")
 app.config["SECRET_KEY"] = secret_key
 app.config["SESSION_TYPE"] = "filesystem"
-app.config["SESSION_FILE_DIR"] = "/tmp/flask_session"
+app.config["SESSION_FILE_DIR"] = "/data/flask_session"
 # Only require HTTPS cookies in production (localhost uses HTTP)
 # Can be overridden via SESSION_COOKIE_SECURE env var (set to "false" for dev)
 session_cookie_secure = os.environ.get("SESSION_COOKIE_SECURE", "").lower()
