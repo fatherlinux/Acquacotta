@@ -317,7 +317,7 @@ def auth_google():
         authorization_url, state = flow.authorization_url(
             access_type="offline",
             include_granted_scopes="true",
-            prompt="consent",
+            prompt="select_account",  # Fast login for returning users
         )
         session["oauth_state"] = state
         # Store PKCE code_verifier for the callback (required by Google)
