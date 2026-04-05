@@ -26,7 +26,14 @@ jobs:
 
       - name: Extract version from tag
         id: version
-        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+            echo "IS_TAG=true" >> $GITHUB_OUTPUT
+          else
+            echo "VERSION=main" >> $GITHUB_OUTPUT
+            echo "IS_TAG=false" >> $GITHUB_OUTPUT
+          fi
 
       - name: Log in to Quay.io
         uses: docker/login-action@v3
@@ -35,7 +42,8 @@ jobs:
           username: ${{ secrets.QUAY_USERNAME }}
           password: ${{ secrets.QUAY_PASSWORD }}
 
-      - name: Build and push container image
+      - name: Build and push container image (with version tag)
+        if: steps.version.outputs.IS_TAG == 'true'
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -44,6 +52,19 @@ jobs:
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.VERSION }}
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ steps.version.outputs.VERSION }}
+
+      - name: Build and push container image (latest only)
+        if: steps.version.outputs.IS_TAG == 'false'
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Containerfile
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
