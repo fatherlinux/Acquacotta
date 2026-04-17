@@ -318,7 +318,9 @@ def auth_google():
         session["oauth_state"] = state
         # Store PKCE code_verifier for the callback (required by Google)
         session["code_verifier"] = flow.code_verifier
-        app.logger.info(f"OAuth: Stored code_verifier in session (length: {len(flow.code_verifier) if flow.code_verifier else 0})")
+        app.logger.info(
+            f"OAuth: Stored code_verifier in session (length: {len(flow.code_verifier) if flow.code_verifier else 0})"
+        )
         # Store user-provided spreadsheet ID to use after callback
         requested_spreadsheet_id = request.args.get("spreadsheet_id", "").strip()
         if requested_spreadsheet_id:
@@ -347,7 +349,9 @@ def auth_callback():
 
         # Restore PKCE code_verifier from the initial auth request
         flow.code_verifier = session.pop("code_verifier", None)
-        app.logger.info(f"OAuth callback: Retrieved code_verifier from session: {flow.code_verifier is not None} (length: {len(flow.code_verifier) if flow.code_verifier else 0})")
+        app.logger.info(
+            f"OAuth callback: Retrieved code_verifier from session: {flow.code_verifier is not None} (length: {len(flow.code_verifier) if flow.code_verifier else 0})"
+        )
         app.logger.info(f"OAuth callback: Session keys present: {list(session.keys())}")
         flow.fetch_token(authorization_response=request.url)
         credentials = flow.credentials
