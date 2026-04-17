@@ -22,7 +22,6 @@ from pathlib import Path
 os.environ["OAUTHLIB_RELAX_TOKEN_SCOPE"] = "1"
 
 from flask import Flask, Response, jsonify, redirect, render_template, request, session
-from flask_session import Session
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
@@ -34,7 +33,7 @@ import sheets_storage
 app = Flask(__name__)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1)
 
-# Session configuration
+# Session configuration — uses Flask's built-in signed-cookie sessions (no filesystem required)
 secret_key = os.environ.get("FLASK_SECRET_KEY")
 if not secret_key:
     if os.environ.get("FLASK_ENV") == "development":
@@ -42,8 +41,6 @@ if not secret_key:
     else:
         raise ValueError("FLASK_SECRET_KEY environment variable must be set in production")
 app.config["SECRET_KEY"] = secret_key
-app.config["SESSION_TYPE"] = "filesystem"
-app.config["SESSION_FILE_DIR"] = "/data/flask_session"
 # Only require HTTPS cookies in production (localhost uses HTTP)
 # Can be overridden via SESSION_COOKIE_SECURE env var (set to "false" for dev)
 session_cookie_secure = os.environ.get("SESSION_COOKIE_SECURE", "").lower()
@@ -56,7 +53,6 @@ else:
     app.config["SESSION_COOKIE_SECURE"] = os.environ.get("FLASK_ENV") != "development"
 app.config["SESSION_COOKIE_HTTPONLY"] = True  # Prevent JavaScript access
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"  # CSRF protection
-Session(app)
 
 
 @app.errorhandler(Exception)
