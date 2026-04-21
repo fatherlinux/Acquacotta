@@ -336,9 +336,17 @@ def auth_google():
 def auth_callback():
     """Handle Google OAuth callback."""
     try:
-        # Validate OAuth state to prevent CSRF attacks
+        # Validate OAuth state and PKCE verifier — both must be present from the initial auth request.
+        # If either is missing the session was cleared (browser restart, cookie expiry) mid-flow;
+        # the stale authorization code is unusable so restart cleanly.
         callback_state = request.args.get("state")
         stored_state = session.pop("oauth_state", None)  # Pop to ensure one-time use
+        code_verifier = session.pop("code_verifier", None)
+
+        if stored_state is None or code_verifier is None:
+            app.logger.info("OAuth callback: session cleared mid-flow (browser restart/expiry), restarting OAuth flow")
+            return redirect("/auth/google")
+
         if not callback_state or callback_state != stored_state:
             app.logger.warning("OAuth state mismatch - possible CSRF attack")
             return jsonify({"error": "Invalid OAuth state"}), HTTPStatus.BAD_REQUEST
@@ -347,11 +355,8 @@ def auth_callback():
         if not flow:
             return jsonify({"error": "Google OAuth not configured"}), HTTPStatus.INTERNAL_SERVER_ERROR
 
-        # Restore PKCE code_verifier from the initial auth request
-        flow.code_verifier = session.pop("code_verifier", None)
-        app.logger.info(
-            f"OAuth callback: Retrieved code_verifier from session: {flow.code_verifier is not None} (length: {len(flow.code_verifier) if flow.code_verifier else 0})"
-        )
+        flow.code_verifier = code_verifier
+        app.logger.info(f"OAuth callback: Retrieved code_verifier from session (length: {len(code_verifier)})")
         app.logger.info(f"OAuth callback: Session keys present: {list(session.keys())}")
         flow.fetch_token(authorization_response=request.url)
         credentials = flow.credentials
