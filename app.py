@@ -339,6 +339,13 @@ def auth_callback():
         # Validate OAuth state to prevent CSRF attacks
         callback_state = request.args.get("state")
         stored_state = session.pop("oauth_state", None)  # Pop to ensure one-time use
+
+        if stored_state is None:
+            # Session was cleared (browser restart, cookie expiry) while OAuth was in flight.
+            # The authorization code is now unusable — restart the flow cleanly.
+            app.logger.info("OAuth callback: session missing (browser restart/expiry), restarting OAuth flow")
+            return redirect(url_for("auth_google"))
+
         if not callback_state or callback_state != stored_state:
             app.logger.warning("OAuth state mismatch - possible CSRF attack")
             return jsonify({"error": "Invalid OAuth state"}), HTTPStatus.BAD_REQUEST
@@ -348,9 +355,15 @@ def auth_callback():
             return jsonify({"error": "Google OAuth not configured"}), HTTPStatus.INTERNAL_SERVER_ERROR
 
         # Restore PKCE code_verifier from the initial auth request
-        flow.code_verifier = session.pop("code_verifier", None)
+        code_verifier = session.pop("code_verifier", None)
+        if code_verifier is None:
+            # code_verifier missing despite a valid state — PKCE handshake is broken.
+            # Restart the flow; the stale authorization code can't be exchanged anyway.
+            app.logger.warning("OAuth callback: code_verifier missing despite valid state, restarting OAuth flow")
+            return redirect(url_for("auth_google"))
+        flow.code_verifier = code_verifier
         app.logger.info(
-            f"OAuth callback: Retrieved code_verifier from session: {flow.code_verifier is not None} (length: {len(flow.code_verifier) if flow.code_verifier else 0})"
+            f"OAuth callback: Retrieved code_verifier from session (length: {len(code_verifier)})"
         )
         app.logger.info(f"OAuth callback: Session keys present: {list(session.keys())}")
         flow.fetch_token(authorization_response=request.url)
