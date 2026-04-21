@@ -198,6 +198,36 @@ class TestClearInitialSync:
         assert data["needs_initial_sync"] is False
 
 
+class TestAuthCallback:
+    """Tests for the OAuth callback endpoint."""
+
+    def test_callback_redirects_when_session_cleared(self, client):
+        """Callback with no session state (browser restart) should redirect to /auth/google."""
+        # No session set — simulates browser restart clearing the cookie
+        response = client.get("/auth/callback?state=some_state&code=some_code")
+        assert response.status_code == 302
+        assert "/auth/google" in response.headers["Location"]
+
+    def test_callback_redirects_when_code_verifier_missing(self, app, client):
+        """Callback with state but no code_verifier should redirect to /auth/google."""
+        with client.session_transaction() as sess:
+            sess["oauth_state"] = "valid_state"
+            # Deliberately omit code_verifier to simulate partial session loss
+
+        response = client.get("/auth/callback?state=valid_state&code=some_code")
+        assert response.status_code == 302
+        assert "/auth/google" in response.headers["Location"]
+
+    def test_callback_returns_400_on_state_mismatch(self, client):
+        """Callback with mismatched state should return 400 (CSRF protection)."""
+        with client.session_transaction() as sess:
+            sess["oauth_state"] = "expected_state"
+            sess["code_verifier"] = "some_verifier"
+
+        response = client.get("/auth/callback?state=tampered_state&code=some_code")
+        assert response.status_code == 400
+
+
 class TestStaticPages:
     """Tests for static pages."""
 
